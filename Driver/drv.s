@@ -1214,8 +1214,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		lda Length, x
 		sta LenCtr, x
 		lda Frags, x
-		and #FRAG_KEYON | FRAG_KEYON_DIS ;キーオンかキーオン無効の場合ゲートリセット
-		beq next
 		lda Gate, x
 		and #%00111111
 		sta Work
@@ -1254,8 +1252,8 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta GateCtr, x
 	next:
 		lda Frags, x		;キーオフの場合これ以降は処理しない
-		and #FRAG_KEYOFF
-		bne end1
+		and #FRAG_IS_KEYON
+		beq end1
 		lda Frags, x
 		and #FRAG_KEYON	;キーオンされていない
 		bne @N
