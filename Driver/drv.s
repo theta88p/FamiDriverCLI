@@ -717,7 +717,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta $4013
 		ldy #3
 		lda (Work), y
-		sta TrVolume, x
+		sta Volume, x
 		lda #4
 		jsr addptr
 		rts
