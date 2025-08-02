@@ -96,9 +96,8 @@ YPOS5 = $A7
 		jmp ch02
 	@exec:
 		stx CurTrack
-		lda Frags, x
-		and #FRAG_SIL
-		beq @keyon
+		lda Volume, x
+		bne @keyon
 		lda #$ff
 		sta CH1KEY + 0
 		lda #$88
@@ -219,9 +218,8 @@ YPOS5 = $A7
 		jmp ch03
 	@exec:
 		stx CurTrack
-		lda Frags, x
-		and #FRAG_SIL
-		beq @keyon
+		lda Volume, x
+		bne @keyon
 		lda #$ff
 		sta CH2KEY + 0
 		lda #$88
@@ -342,9 +340,8 @@ YPOS5 = $A7
 		jmp ch04
 	@exec:
 		stx CurTrack
-		lda Frags, x
-		and #FRAG_SIL
-		beq @keyon
+		lda Volume, x
+		bne @keyon
 		lda #$ff
 		sta CH3KEY + 0
 		lda #$02
@@ -428,9 +425,8 @@ YPOS5 = $A7
 		jmp ch05
 	@exec:
 		stx CurTrack
-		lda Frags, x
-		and #FRAG_SIL
-		beq @keyon
+		lda Volume, x
+		bne @keyon
 		lda #$ff
 		sta CH4KEY + 0
 		lda #$60
