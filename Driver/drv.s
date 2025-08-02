@@ -1958,24 +1958,29 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 ; レジスタ書き込み
 ; ------------------------------------------------------------------------
 .proc writereg
+		stx Work
 	start:
 		lda Device, x
 		cmp #$ff
 		beq next			;未使用トラックは処理しない
-		cmp PrevDev			;前の音源と違う場合無条件で書き込む
+		cmp PrevDev			;前の音源と違う場合書き込み処理に移行
 		bne exec
+		lda Volume, x		;同じ場合、発音していれば書き込む
+		beq next
 		lda Frags, x
-		and #FRAG_END		;同じ場合、発音していれば書き込む
+		and #FRAG_END
 		bne next
-		lda Volume, x
-		bne exec
+		stx Work
 	next:
+		cpx #0
+		beq exec
 		lda Device, x
 		sta PrevDev
 		dex
 		bpl start			;xがマイナスになったら全トラック終了
 		rts
 	exec:
+		ldx Work
 		stx ProcTr
 		lda Device, x
 		sta PrevDev
@@ -2141,13 +2146,20 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 
 ;1トラック書き込み終了
 .proc writereg_end
-		ldy Device, x		;周波数の保存
+		lda Volume, x		;書き込んだ周波数の保存
+		beq @N
+		ldy Device, x
 		lda Freq_L, x
 		sta PrevFreq_L, y
 		lda Freq_H, x
 		sta PrevFreq_H, y
+	@N:
 		dex
 		bmi end
+		lda Device, x
+		cmp PrevDev
+		beq @N
+		sta PrevDev
 		jmp writereg
 	end:
 		rts
