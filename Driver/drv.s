@@ -33,7 +33,6 @@ LenCtr:			.res	MAX_TRACK	;音長カウンタ
 GateCtr:		.res	MAX_TRACK	;ゲートカウンター
 NoteN:			.res	MAX_TRACK	;ノートナンバー
 DefLen:			.res	MAX_TRACK	;デフォルト音長
-Length:			.res	MAX_TRACK	;音長
 Gate:			.res	MAX_TRACK	;上位2bit 使用中のゲートコマンド 下位5bit ゲートコマンドの値
 TrVolume:		.res	MAX_TRACK	;トラック音量
 Volume:			.res	MAX_TRACK	;音量
@@ -518,7 +517,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		and #FRAG_ENV_DIS_CLR	;エンベロープ無効フラグを降ろす
 		sta EnvFrags, x
 		lda DefLen, x
-		sta Length, x
+		sta LenCtr, x
 		lda #1
 		jsr addptr
 		rts
@@ -542,7 +541,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta EnvFrags, x
 		ldy #1
 		lda (Work), y
-		sta Length, x
+		sta LenCtr, x
 		lda #2
 		jsr addptr
 		rts
@@ -559,7 +558,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		and #FRAG_IS_KEYON_CLR & FRAG_LOAD_CLR	;キーオン中フラグとロードフラグを降ろす
 		sta Frags, x
 		lda DefLen, x
-		sta Length, x
+		sta LenCtr, x
 		lda #1
 		jsr addptr
 		rts
@@ -931,7 +930,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta Frags, x
 		ldy #1
 		lda (Work), y
-		sta Length, x
+		sta LenCtr, x
 		lda #2
 		jsr addptr
 		rts
@@ -1209,8 +1208,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 ; ノート関係の処理
 ; ------------------------------------------------------------------------
 .proc procnote
-		lda Length, x
-		sta LenCtr, x
 		lda Frags, x
 		lda Gate, x
 		and #%00111111
