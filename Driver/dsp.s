@@ -1,7 +1,6 @@
 .importzp	Frags
 .import		IsProc
 .import		Device
-.import		Octave
 .import		NoteN
 .import		Volume
 .import		Tone

@@ -1,7 +1,6 @@
 .exportzp	Frags
 .export		DrvFrags
 .export		Device
-.export		Octave
 .export		NoteN
 .export		Volume
 .export		Tone
@@ -20,7 +19,7 @@
 
 Frags:			.res	MAX_TRACK	;通常のフラグ
 EnvFrags:		.res	MAX_TRACK	;エンベロープのフラグ
-Work:			.res	7
+Work:			.res	6
 
 ;-----------------------------------------------------------------------
 ; Non Zeropage works
@@ -32,7 +31,6 @@ Ptr_L:			.res	MAX_TRACK	;再生箇所のアドレスL
 Ptr_H:			.res	MAX_TRACK	;再生箇所のアドレスH
 LenCtr:			.res	MAX_TRACK	;音長カウンタ
 GateCtr:		.res	MAX_TRACK	;ゲートカウンター
-Octave:			.res	MAX_TRACK	;オクターブ
 NoteN:			.res	MAX_TRACK	;ノートナンバー
 DefLen:			.res	MAX_TRACK	;デフォルト音長
 Length:			.res	MAX_TRACK	;音長
@@ -1352,12 +1350,9 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		;dey				;ノートナンバー0は-1オクターブなので1オクターブ下げる
 		;bpl load
 		;ldy #0			;マイナスになったらゼロに
-	load:
-		pha				;周波数テーブルから周波数を取得
-		tya
-		sta Octave, x
-		pla
-		asl a
+	load:;周波数テーブルから周波数を取得
+		sty Work + 4
+		asl
 		tay
 		lda Device, x
 		cmp #DEV_VRC6_SAW
@@ -1381,7 +1376,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 .endif
 	ss5b:
 .ifdef SS5B
-		inc Octave, x	;5Bは-1オクターブから
+		inc Work + 4	;5Bは-1オクターブから
 		lda Freq_5B, y
 		sta Work + 2
 		lda Freq_5B + 1, y
@@ -1394,16 +1389,16 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta Work + 2
 		lda Freq_FDS + 1, y
 		sta Work + 3
-		lda Octave, x	;オクターブから周波数を計算する(FDSは周波数と比例なので6オクターブから)
+		lda Work + 4	;オクターブから周波数を計算する(FDSは周波数と比例なので6オクターブから)
 		cmp #6
 		bcc @N
 		lda #6
-		sta Octave, x
+		sta Work + 4
 		jmp end
 	@N:
 		lda #6
 		sec
-		sbc Octave, x
+		sbc Work + 4
 		tay
 	@L:
 		beq end
@@ -1413,7 +1408,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		jmp @L
 .endif
 	calc:
-		ldy Octave, x	;オクターブから周波数を計算する
+		ldy Work + 4	;オクターブから周波数を計算する
 	@L:
 		beq end
 		lsr Work + 3
