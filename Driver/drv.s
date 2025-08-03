@@ -274,14 +274,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta GateCtr, x
 		lda #FRAG_ENV_DIS
 		sta EnvFrags, x
-		lda Device, x
-		cmp #4
-		bne @N
-		lda #0
-		jmp @E
-	@N:
 		lda #15
-	@E:
 		sta TrVolume, x
 		lda #%00001000
 		sta HSwpReg, x
