@@ -2460,9 +2460,9 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         value = n;
                         data.push_back(MEM_WRITE);
-                        data.push_back(0xff & address);
-                        data.push_back((address >> 8) & 0xff);
-                        data.push_back(value);
+                        data.push_back(address & 0xff);
+                        data.push_back(address >> 8);
+                        data.push_back(value & 0xff);
                         res = true;
                     }
                 }
