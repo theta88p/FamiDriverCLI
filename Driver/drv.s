@@ -159,10 +159,10 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 
 .proc drv_main
 		lda DrvFrags
-		and #DRV_IS_PROC
-		bne exit
+		and #DRV_IS_FREE
+		beq exit
 		lda DrvFrags
-		ora #DRV_IS_PROC
+		and #DRV_IS_FREE_CLR
 		sta DrvFrags
 		ldx LastTrack
 		jsr pretrack	;トラック処理の前に毎フレームやる処理をここでやる
@@ -199,7 +199,8 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		ldx LastTrack
 		jsr envelope
 		lda DrvFrags
-		and #DRV_DOUBLE_CLR & DRV_IS_PROC_CLR
+		and #DRV_DOUBLE_CLR
+		ora #DRV_IS_FREE
 		sta DrvFrags
 	exit:
 		rts
@@ -249,8 +250,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta SpdCtr
 		lda #$ff
 		sta PrevDev
-		lda #DRV_INIT
-		sta DrvFrags
 		rts
 .endproc
 
@@ -373,6 +372,8 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta FdsModTone	;モジュレータ波形を指定しない場合無効
 		sta FdsPrevMod
 .endif
+		lda #DRV_INIT | DRV_IS_FREE
+		sta DrvFrags
 		rts
 .endproc
 

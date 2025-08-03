@@ -33,7 +33,7 @@
 ;---------------------------------------
 
 	lda DrvFrags
-	and #DRV_INIT | DRV_IS_PROC
+	and #DRV_INIT | DRV_IS_FREE
 	beq Count
 
 	lda #0
