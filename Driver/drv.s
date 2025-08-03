@@ -19,7 +19,7 @@
 
 Frags:			.res	MAX_TRACK	;通常のフラグ
 EnvFrags:		.res	MAX_TRACK	;エンベロープのフラグ
-Work:			.res	6
+Work:			.res	7
 
 ;-----------------------------------------------------------------------
 ; Non Zeropage works
