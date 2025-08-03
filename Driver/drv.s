@@ -1450,6 +1450,9 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		jsr calc_volume
 		jmp next
 	vol:
+		lda Device, x
+		cmp #DEV_2A03_DPCM | DEV_2A03_TRI	;三角波とDPCMは音量計算しない
+		beq next
 		lda Frags, x
 		and #FRAG_IS_KEYON	;キーオフされていたら無音に
 		beq ld0				;それ以外は最大値をロード
