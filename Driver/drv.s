@@ -1996,7 +1996,8 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta $400a
 		lda Freq_H, x
 		sta $400b
-		lda Volume, x
+		lda Frags, x
+		and #FRAG_IS_KEYON
 		beq @stop
 		lda #$ff
 		jmp @write
