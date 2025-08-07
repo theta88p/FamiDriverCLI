@@ -20,7 +20,7 @@ int wmain(int argc, wchar_t* argv[])
     bool nes = false;
 
     std::wcout.imbue(std::locale("Japanese"));
-    std::wcout << "FamiDriver CLI Compiler v0.3.2  (c) theta 2024-2025" << std::endl;
+    std::wcout << "FamiDriver CLI Compiler v0.3.3  (c) theta 2024-2025" << std::endl;
     std::wcout << std::endl;
 
     if (argc < 2)
