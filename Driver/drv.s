@@ -246,8 +246,10 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta ProcTr
 		sta SpdFreq
 		sta SpdCtr
-		lda #$ff
+		lda #$ff				;↓初回必ず実行したいので$ffを書き込んでおく
 		sta PrevDev
+		sta PrevFreq_L
+		sta PrevFreq_H
 		rts
 .endproc
 
@@ -2189,8 +2191,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		ora Volume, x
 	r4000:
 		sta $4000, y
-		lda Volume, x		;音量が0ならこれ以降は処理しない
-		beq end
 	hws:
 		ldy Work + 1
 		lda HSwpReg, x
