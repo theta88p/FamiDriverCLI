@@ -1449,11 +1449,12 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		and #FRAG_VENV
 		beq vol
 		jsr volenv
-		jsr calc_volume
-		jmp next
+		jmp calc
 	vol:
 		lda Device, x
-		cmp #DEV_2A03_DPCM | DEV_2A03_TRI	;三角波とDPCMは音量計算しない
+		cmp #DEV_2A03_TRI	;三角波は音量計算しない
+		beq next
+		cmp #DEV_2A03_DPCM	;DPCMは音量計算しない
 		beq next
 		lda Frags, x
 		and #FRAG_IS_KEYON	;キーオフされていたら無音に
@@ -1464,14 +1465,18 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		cmp #DEV_FDS
 		beq ld63
 		lda #15
-		jmp calc
+		jmp store
 	ld0:
 		lda #0
-		jmp calc
+		jmp store
 	ld63:
 		lda #63
-	calc:
+	store:
 		sta Volume, x
+	calc:
+		lda EnvFrags, x
+		and #FRAG_VHOLD		;音量ホールドフラグが立っていたら音量計算しない
+		bne next
 		jsr calc_volume
 	next:
 		dex
@@ -1611,18 +1616,24 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		and #%01111111		;最上位ビットを消す
 		sta VEnvPos, x
 	get:
+		lda EnvFrags, x
+		and #FRAG_VHOLD_CLR	;音量ホールドフラグクリア
+		sta EnvFrags, x
 		lda VEnvPos, x
 		asl a
 		tay
-		lda (Work), y	;アドレスにあるデータを取得（音量）
+		lda (Work), y		;アドレスにあるデータを取得（音量）
 		sta Volume, x		;いったん保存
 		iny
-		lda (Work), y	;アドレスにあるデータを取得（フレーム数）
+		lda (Work), y		;アドレスにあるデータを取得（フレーム数）
 		sta VEnvCtr, x		;カウンタに代入
-		beq ret			;カウンタが0ならエンベロープ位置を移動しない
+		beq ret				;カウンタが0ならエンベロープ位置を移動しない
 		inc VEnvPos, x		;エンベロープ位置移動
 		rts
 	end:
+		lda EnvFrags, x
+		ora #FRAG_VHOLD		;音量ホールドフラグを立てる
+		sta EnvFrags, x
 		dec VEnvCtr, x
 	ret:
 		rts
