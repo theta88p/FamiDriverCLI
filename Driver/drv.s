@@ -1227,7 +1227,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 	@G2:
 		ldy Work
 		lda LenCtr, x
-		jsr mult		;a * y / 8
+		jsr multiply		;a * y / 8
 		lsr Work + 3
 		ror Work + 2
 		lsr Work + 3
@@ -1664,7 +1664,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 	mult:
 		ldy TrVolume, x
 		iny					;16で割る都合上1を足す
-		jsr mult			;a * y
+		jsr multiply		;a * y
 		lsr Work + 3		;16で割る
 		ror Work + 2
 		lsr Work + 3
@@ -2526,7 +2526,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 
 
 ;乗算（a * y）
-.proc mult
+.proc multiply
 		sty Work + 4
 		sta Work + 5
 		lda #0
