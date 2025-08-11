@@ -1452,8 +1452,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		jmp calc
 	vol:
 		lda Device, x
-		cmp #DEV_2A03_TRI	;三角波は音量計算しない
-		beq next
 		cmp #DEV_2A03_DPCM	;DPCMは音量計算しない
 		beq next
 		lda Frags, x
