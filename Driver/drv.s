@@ -1472,9 +1472,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 	store:
 		sta Volume, x
 	calc:
-		lda EnvFrags, x
-		and #FRAG_VHOLD		;音量ホールドフラグが立っていたら音量計算しない
-		bne next
 		jsr calc_volume
 	next:
 		dex
@@ -1587,53 +1584,53 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 	keyon:
 		lda #1
 		sta VEnvPos, x		;キーオン位置に移動
+		ldy #2
+		lda (Work), y		;アドレスにあるデータを取得（音量）
+		sta Volume, x
+		iny
+		lda (Work), y		;アドレスにあるデータを取得（フレーム数）
 		clc
 		adc VEnvDelay, x	;ディレイを加算
 		sta VEnvCtr, x
-		jmp other
+		rts
 	keyoff:
 		ldy #1
 		lda (Work), y
 		sta VEnvPos, x		;キーオフ位置に移動
-		ldy #0
-		lda (Work), y
-		and #%10000000		;ヘッダ1個目に最上位ビットが立っていたらキーオフ無効
-		beq get
+		jmp get
 	other:
 		lda VEnvCtr, x
 		cmp #2
-		bcs end				;カウンタが2以上ならカウントして終了
-		cmp #0				;カウンタが0になったらrts
-		beq ret
-		lda VEnvPos, x
+		bcs count			;カウンタが2以上ならカウントダウンして現在位置の値を取得
+		cmp #0				;カウンタが0になったら値を取得して終了
+		beq end
+		inc VEnvPos, x		;エンベロープ位置移動
 		ldy #1
-		cmp (Work), y
+		lda (Work), y
+		cmp VEnvPos, x
 		bne get				;ヘッダ2番目（キーオフ位置）に達したら
 		ldy #0				;ヘッダ1番目（ループ位置）に戻る
 		lda (Work), y
 		and #%01111111		;最上位ビットを消す
 		sta VEnvPos, x
 	get:
-		lda EnvFrags, x
-		and #FRAG_VHOLD_CLR	;音量ホールドフラグクリア
-		sta EnvFrags, x
 		lda VEnvPos, x
-		asl a
+		asl
 		tay
 		lda (Work), y		;アドレスにあるデータを取得（音量）
-		sta Volume, x		;いったん保存
+		sta Volume, x
 		iny
 		lda (Work), y		;アドレスにあるデータを取得（フレーム数）
-		sta VEnvCtr, x		;カウンタに代入
-		beq ret				;カウンタが0ならエンベロープ位置を移動しない
-		inc VEnvPos, x		;エンベロープ位置移動
+		sta VEnvCtr, x
 		rts
-	end:
-		lda EnvFrags, x
-		ora #FRAG_VHOLD		;音量ホールドフラグを立てる
-		sta EnvFrags, x
+	count:
 		dec VEnvCtr, x
-	ret:
+	end:
+		lda VEnvPos, x
+		asl
+		tay
+		lda (Work), y		;アドレスにあるデータを取得（音量）
+		sta Volume, x
 		rts
 .endproc
 
