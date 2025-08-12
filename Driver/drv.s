@@ -1328,10 +1328,17 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		ldy #0
 		cmp #12
 		bcc load
+		cmp #60
+		bcc oct
+		ldy #5
+		sec
+		sbc #60
+		jmp comp
 	oct:
 		sec
 		sbc #12
 		iny
+	comp:
 		cmp #12
 		bcs oct
 	load:
@@ -1695,13 +1702,14 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta FEnvCtr, x
 		jmp other
 	keyoff:
-		ldy #1
-		lda (Work), y
-		sta FEnvPos, x		;キーオフ位置に移動
 		ldy #0
 		lda (Work), y
 		and #%10000000		;ヘッダ1個目に最上位ビットが立っていたらキーオフ無効
-		beq get
+		bne other
+		ldy #1
+		lda (Work), y
+		sta FEnvPos, x		;キーオフ位置に移動
+		jmp get
 	other:
 		lda FEnvCtr, x
 		cmp #2
@@ -1729,23 +1737,22 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		adc RefFreq_L, x	;周波数に加算
 		sta Freq_L, x
 		lda RefFreq_H, x
-		adc #0
-		sta Freq_H, x
+		bcc @N
+		inc Freq_H, x
+	@N:
 		jmp next
 	neg:
 		clc
 		adc RefFreq_L, x	;周波数に加算
 		sta Freq_L, x
 		lda RefFreq_H, x
-		sbc #0
-		sta Freq_H, x
+		bcs next
+		dec Freq_H, x
 	next:
 		iny
 		lda (Work), y	;アドレスにあるデータを取得（フレーム数）
 		sta FEnvCtr, x		;カウンタに代入
-		beq @S				;カウンタが0ならエンベロープ位置を移動しない
 		inc FEnvPos, x		;エンベロープ位置移動
-	@S:
 		rts
 	end:
 		dec FEnvCtr, x
@@ -1778,13 +1785,14 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta NEnvCtr, x
 		jmp other
 	keyoff:
-		ldy #1
-		lda (Work), y
-		sta NEnvPos, x		;キーオフ位置に移動
 		ldy #0
 		lda (Work), y
 		and #%10000000		;ヘッダ1個目に最上位ビットが立っていたらキーオフ無効
-		beq get
+		beq other
+		ldy #1
+		lda (Work), y
+		sta NEnvPos, x		;キーオフ位置に移動
+		jmp get
 	other:
 		lda NEnvCtr, x
 		cmp #2
@@ -1801,8 +1809,8 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta NEnvPos, x
 	get:
 		lda NEnvPos, x
-		asl a
-		pha
+		asl
+		sta Work + 6
 		lda Device, x
 		cmp #DEV_2A03_NOISE
 		beq @N
@@ -1821,8 +1829,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		jmp @N
 	@N2:
 .endif
-		pla
-		tay
+		ldy Work + 6
 		lda (Work), y	;アドレスにあるデータを取得
 		clc
 		adc RefNoteN, x		;ノートナンバーに加算
@@ -1834,13 +1841,10 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		lda Work + 3
 		sta RefFreq_H, x
 		sta Freq_H, x
-		lda NEnvPos, x
-		asl a
-		tay
+		ldy Work + 6
 		jmp last
 	@N:
-		pla
-		tay
+		ldy Work + 6
 		lda (Work), y	;アドレスにあるデータを取得
 		eor #$ff			;反転して加算
 		clc
@@ -1852,9 +1856,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		iny
 		lda (Work), y	;アドレスにあるデータを取得（フレーム数）
 		sta NEnvCtr, x		;カウンタに代入
-		beq @S				;カウンタが0ならエンベロープ位置を移動しない
 		inc NEnvPos, x		;エンベロープ位置移動
-	@S:
 		rts
 	end:
 		dec NEnvCtr, x
@@ -1887,13 +1889,14 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta TEnvCtr, x
 		jmp other
 	keyoff:
-		ldy #1
-		lda (Work), y
-		sta TEnvPos, x		;キーオフ位置に移動
 		ldy #0
 		lda (Work), y
 		and #%10000000		;ヘッダ1個目に最上位ビットが立っていたらキーオフ無効
-		beq get
+		bne other
+		ldy #1
+		lda (Work), y
+		sta TEnvPos, x		;キーオフ位置に移動
+		jmp get
 	other:
 		lda TEnvCtr, x
 		cmp #2
@@ -1910,17 +1913,14 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta TEnvPos, x
 	get:
 		lda TEnvPos, x
-		asl a
+		asl
 		tay
 		lda (Work), y		;アドレスにあるデータを取得
-		clc
 		sta Tone, x			;代入
 		iny
 		lda (Work), y		;アドレスにあるデータを取得（フレーム数）
 		sta TEnvCtr, x		;カウンタに代入
-		beq @S				;カウンタが0ならエンベロープ位置を移動しない
 		inc TEnvPos, x		;エンベロープ位置移動
-	@S:
 		rts
 	end:
 		dec TEnvCtr, x
