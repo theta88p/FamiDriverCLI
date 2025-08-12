@@ -201,7 +201,8 @@ void MMLReader::readMML()
 					trheadsize += 4; //FDSの波形アドレス分
                 }
 
-                readBrackets(ss.tellg(), trheadsize, trhead, musdata);
+                int tone = 0;
+                readBrackets(ss.tellg(), trheadsize, trhead, musdata, tone);
                 trhead.push_back(0xff);             //トラックヘッダ終端
                 trhead.push_back(lengthtbl[3]);     //デフォルトのデフォルト音長（4分音符）
 
@@ -882,10 +883,12 @@ void MMLReader::readSubRoutine(int& subsize)
                         int pos = ss.tellg();
                         std::vector<unsigned char> trhead;
 						std::vector<unsigned char> trbody;
-                        readBrackets(pos, 0, trhead, trbody);
+                        int tone = 0;
+                        readBrackets(pos, 0, trhead, trbody, tone);
                         SubData sd;
                         sd.num = n;
                         sd.addr = totalpos + subsize;
+                        sd.tone = tone;
                         trbody.push_back(LOOP_MID_END);    //ループ途中終了コードで戻る
                         sd.data = trbody;
                         subdata[n] = sd;
@@ -1339,7 +1342,7 @@ void MMLReader::readModData(std::vector<unsigned char>& out)
 }
 
 
-void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody)
+void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone)
 {
     char c;
     int n;
@@ -1547,6 +1550,13 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         {
                             usingCmds.erase(cmd - 1);   //開始コマンドがあったら消す
                         }
+
+                        if (cmd == TONE_ENV_STOP)
+                        {
+                            data.push_back(TONE);   //ドライバ側で戻す
+                            data.push_back(tone);
+                            usingCmds[TONE] = { tone };  //音色コマンドも使用中にする
+                        }
                     }
                     else if (cmd == TONE)
                     {
@@ -1569,6 +1579,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         else
                         {
                             data.push_back(args[0]);
+                            tone = args[0];
                         }
                         usingCmds[cmd] = args;
                     }
@@ -1591,7 +1602,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     //ノートの変換先が存在した場合変換する
                     newNN = map.convert;
                 }
-                
+
                 if (map.commands.count(REST_DEFLEN))   //休符コマンドが入っていた場合
                 {
                     skipSpace();
@@ -1602,6 +1613,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     if (tr.device == DEV_2A03_NOISE || tr.device == DEV_2A03_DPCM)
                     {
                         //newNN = 0x0f - newNN & 0x0f;  //ドライバ側でやる
+                        newNN = newNN & 0x0f;
                     }
                     else
                     {
@@ -1617,6 +1629,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (tr.device == DEV_2A03_NOISE || tr.device == DEV_2A03_DPCM)
                 {
                     //nn = 0x0f - nn & 0x0f;    //ドライバ側でやる
+                    nn = nn & 0x0f;
                 }
                 else
                 {
@@ -1923,6 +1936,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 {
                     data.push_back(TONE);
                     data.push_back(n);
+					tone = n;   //音色を保存
                 }
             }
             else if (isNextStr("fds"))
@@ -2152,7 +2166,30 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 else if (c == 't' || c == 'T')   //音色エンベロープ
                 {
                     skipSpace();
-                    getAndPushEnvAssign(data, envdata, TONE_ENV, t_offset);
+                    if (isNextChar('*'))
+                    {
+                        data.push_back(TONE_ENV_STOP);     //停止コマンド
+                        data.push_back(TONE);
+						data.push_back(tone);
+                    }
+                    else
+                    {
+                        if (getMultiDigit(n))
+                        {
+                            int envn = n + t_offset;
+                            int delay = 0;
+                            skipSpace();
+                            if (isNextChar(','))
+                            {
+                                if (getMultiDigit(n))
+                                {
+                                    delay = n;
+                                }
+                            }
+
+                            pushEnvAssign(data, envdata, TONE_ENV, envn, delay, false, 0);
+                        }
+                    }
                     break;
                 }
                 else
@@ -2635,6 +2672,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     data.push_back(subdata[n].addr & 0x00ff);
                     data.push_back((subdata[n].addr & 0xff00) >> 8);
                     isLooped = true;
+					tone = subdata[n].tone;
                 }
             }
             break;

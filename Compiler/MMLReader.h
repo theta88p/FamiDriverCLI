@@ -124,7 +124,7 @@ private:
 	void readDifinitions();
 	void readSubRoutine(int& subsize);
 	void readEnvelope(int& envsize);
-	void readBrackets(int startpos, int trackheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody);
+	void readBrackets(int startpos, int trackheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone);
 	void readWaveData(std::vector<unsigned char>& out);
 	void readModData(std::vector<unsigned char>& out);
 	void getCmdArgs(CommandArgs& args);

@@ -42,7 +42,6 @@ Freq_H:			.res	MAX_TRACK	;周波数H
 RefFreq_L:		.res	MAX_TRACK	;音程エンベロープ値を加算する前の周波数L
 RefFreq_H:		.res	MAX_TRACK	;音程エンベロープ値を加算する前の周波数H
 RefNoteN:		.res	MAX_TRACK	;ノートエンベロープ値を加算する前のノートナンバー
-RefTone:		.res	MAX_TRACK	;音色エンベロープ値を加算する前の音色
 PrevFreq_L:		.res	MAX_TRACK	;前回レジスタに書き込んだ周波数L（音源ごとに保存）
 PrevFreq_H:		.res	MAX_TRACK	;前回レジスタに書き込んだ周波数H（音源ごとに保存）
 KeyShift:		.res	MAX_TRACK	;キーシフト値
@@ -266,7 +265,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		sta VEnvPos, x
 		sta EnvFrags, x
 		sta Tone, x
-		sta RefTone, x
 		sta Frags, x
 		lda #1
 		sta LenCtr, x
@@ -694,7 +692,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		ldy #1
 		lda (Work), y
 		sta Tone, x
-		sta RefTone, x		;音色番号を保存（音色エンベロープ解除用）
 		lda #2
 		jsr addptr
 		rts
@@ -885,8 +882,6 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		lda EnvFrags, x
 		and #FRAG_TENV_CLR	;フラグを降ろす
 		sta EnvFrags, x
-		lda RefTone, x
-		sta Tone, x			;音色番号を戻す
 		lda #1
 		jsr addptr
 		rts
