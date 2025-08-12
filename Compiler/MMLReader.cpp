@@ -1346,10 +1346,14 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     int volume = 15;
     int octave = 4;
     int grace = 0;
+    int loopmid_volume = 15;
+	int loopmid_octave = 4;
+    int loopmid_tone = 0;
     bool isTrack = false;
     bool isMusic = false;
     bool usePDelay = false;
     bool isLooped = false;
+	bool isLoopedMid = false;
     int sweepStart = 0;
     int pddist = 4;
     int pdvol = 0;
@@ -1757,11 +1761,23 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             break;
         case ']':   //ループ終了
             data.push_back(LOOP_END);
-            isLooped = true;
+            isLooped = false;
+            if (isLoopedMid)
+            {
+                //ループ途中終了時のパラメータを戻す
+                volume = loopmid_volume;
+                octave = loopmid_octave;
+                tone = loopmid_tone;
+				isLoopedMid = false;
+            }
             break;
         case ':':   //ループ途中終了
             data.push_back(LOOP_MID_END);
-            isLooped = true;
+			isLoopedMid = true;
+            //ループ途中終了時のパラメータを保存
+			loopmid_volume = volume;
+			loopmid_octave = octave;
+			loopmid_tone = tone;
             break;
         case 'q':   //ゲートタイムq
             skipSpace();
