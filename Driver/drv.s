@@ -1737,17 +1737,16 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		adc RefFreq_L, x	;周波数に加算
 		sta Freq_L, x
 		lda RefFreq_H, x
-		bcc @N
-		inc Freq_H, x
-	@N:
+		adc #0
+		sta Freq_H, x
 		jmp next
 	neg:
 		clc
 		adc RefFreq_L, x	;周波数に加算
 		sta Freq_L, x
 		lda RefFreq_H, x
-		bcs next
-		dec Freq_H, x
+		sbc #0
+		sta Freq_H, x
 	next:
 		iny
 		lda (Work), y	;アドレスにあるデータを取得（フレーム数）
