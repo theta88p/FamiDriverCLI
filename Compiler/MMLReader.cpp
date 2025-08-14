@@ -574,10 +574,24 @@ void MMLReader::readDifinitions()
                                                 cmd = PLAY_DATA;
                                                 getCmdArgs(args);
                                                 break;
-                                            default:
+                                            case '0':
+                                            case '1':
+                                            case '2':
+                                            case '3':
+                                            case '4':
+                                            case '5':
+                                            case '6':
+                                            case '7':
+                                            case '8':
+                                            case '9':
                                                 cmd = TONE;
-                                                args.push_back(std::atoi(&c));
+                                                ss.seekg((int)ss.tellg() - 1);
+                                                getMultiDigit(n);
+												args.push_back(n);
                                                 break;
+                                            default:
+                                                std::cerr << "Line " << linenum << " : [Map difinition] Invalid command." << std::endl;
+                                                exit(1);
                                             }
                                         }
                                         else if (c == 's' || c == 'S')  //ソフトウェアスイープ
