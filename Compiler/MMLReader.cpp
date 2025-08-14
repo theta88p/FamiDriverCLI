@@ -475,7 +475,7 @@ void MMLReader::readDifinitions()
                     {
                         if (mapdiflist.count(n) > 0)
                         {
-                            std::cerr << "Line " << linenum << " : Map diffinition #" << n << " is already exists." << std::endl;
+                            std::cerr << "Line " << linenum << " : [Map difinition] Map diffinition #" << n << " is already exists." << std::endl;
                             exit(1);
                         }
 
@@ -670,7 +670,7 @@ void MMLReader::readDifinitions()
                                         }
                                         else
                                         {
-                                            std::cerr << "Line " << linenum << " : Invalid map difinition." << std::endl;
+                                            std::cerr << "Line " << linenum << " : [Map difinition] Invalid command." << std::endl;
                                             exit(1);
                                         }
                                     }
@@ -1494,7 +1494,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         }
                         else
                         {
-                            std::cerr << "Line " << linenum << " : [Map difinition] Missing args." << std::endl;
+                            std::cerr << "Line " << linenum << " : [Map] Missing args." << std::endl;
                             exit(1);
                         }
 
@@ -1564,13 +1564,6 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         {
                             usingCmds.erase(cmd - 1);   //開始コマンドがあったら消す
                         }
-
-                        if (cmd == TONE_ENV_STOP)
-                        {
-                            data.push_back(TONE);   //ドライバ側で戻す
-                            data.push_back(tone);
-                            usingCmds[TONE] = { tone };  //音色コマンドも使用中にする
-                        }
                     }
                     else if (cmd == TONE)
                     {
@@ -1586,7 +1579,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                             }
                             else
                             {
-                                std::cerr << "Line " << linenum << " : [Map difinition] DPCM #" << args[0] << " is not registered." << std::endl;
+                                std::cerr << "Line " << linenum << " : [Map] DPCM #" << args[0] << " is not registered." << std::endl;
                                 exit(1);
                             }
                         }
@@ -2180,30 +2173,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 else if (c == 't' || c == 'T')   //音色エンベロープ
                 {
                     skipSpace();
-                    if (isNextChar('*'))
-                    {
-                        data.push_back(TONE_ENV_STOP);     //停止コマンド
-                        data.push_back(TONE);
-						data.push_back(tone);
-                    }
-                    else
-                    {
-                        if (getMultiDigit(n))
-                        {
-                            int envn = n + t_offset;
-                            int delay = 0;
-                            skipSpace();
-                            if (isNextChar(','))
-                            {
-                                if (getMultiDigit(n))
-                                {
-                                    delay = n;
-                                }
-                            }
-
-                            pushEnvAssign(data, envdata, TONE_ENV, envn, delay, false, 0);
-                        }
-                    }
+                    getAndPushEnvAssign(data, envdata, TONE_ENV, t_offset);
                     break;
                 }
                 else

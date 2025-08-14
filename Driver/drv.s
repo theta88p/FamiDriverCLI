@@ -33,10 +33,10 @@ LenCtr:			.res	MAX_TRACK	;音長カウンタ
 GateCtr:		.res	MAX_TRACK	;ゲートカウンター
 NoteN:			.res	MAX_TRACK	;ノートナンバー
 DefLen:			.res	MAX_TRACK	;デフォルト音長
-Gate:			.res	MAX_TRACK	;上位2bit 使用中のゲートコマンド 下位5bit ゲートコマンドの値
+Gate:			.res	MAX_TRACK	;上位2bit:使用中のゲートコマンド 下位6bit:ゲートコマンドの値
 TrVolume:		.res	MAX_TRACK	;トラック音量
 Volume:			.res	MAX_TRACK	;音量
-Tone:			.res	MAX_TRACK	;音色
+Tone:			.res	MAX_TRACK	;上位4bit:元の音色 下位4bit:現在の音色
 Freq_L:			.res	MAX_TRACK	;周波数L
 Freq_H:			.res	MAX_TRACK	;周波数H
 RefFreq_L:		.res	MAX_TRACK	;音程エンベロープ値を加算する前の周波数L
@@ -691,6 +691,12 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 .endif
 		ldy #1
 		lda (Work), y
+		sta Work + 6
+		asl
+		asl
+		asl
+		asl
+		ora Work + 6
 		sta Tone, x
 		lda #2
 		jsr addptr
@@ -882,6 +888,15 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		lda EnvFrags, x
 		and #FRAG_TENV_CLR	;フラグを降ろす
 		sta EnvFrags, x
+		lda Tone, x			;上位4bitにある元の音色をロード
+		and #$f0
+		sta Work + 6
+		lsr
+		lsr
+		lsr
+		lsr
+		ora Work + 6
+		sta Tone, x
 		lda #1
 		jsr addptr
 		rts
@@ -1915,6 +1930,9 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		asl
 		tay
 		lda (Work), y		;アドレスにあるデータを取得
+		eor Tone, x			;下位4bitに保存
+		and #$0f
+		eor Tone, x
 		sta Tone, x			;代入
 		iny
 		lda (Work), y		;アドレスにあるデータを取得（フレーム数）
@@ -2016,9 +2034,10 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		beq @end
 	@r400e:
 		lda Tone, x
+		and #$0f
 		clc
-		ror a
-		ror a
+		ror
+		ror
 		ora NoteN, x
 		sta $400e
 	@end:
@@ -2144,6 +2163,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 .proc writesqr
 		sty Work + 1		;一旦yを保存
 		lda Tone, x
+		and #$0f
 		clc
 		ror
 		ror
@@ -2220,6 +2240,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 	r9000:
 		ldy #0
 		lda Tone, x
+		and #$0f
 		asl
 		asl
 		asl
@@ -2261,6 +2282,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 .proc write_mmc5
 		sty Work		;一旦yを保存
 		lda Tone, x
+		and #$0f
 		clc
 		ror
 		ror
@@ -2339,6 +2361,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 .proc write_fds
 		lda FdsPrevWav
 		cmp Tone, x
+		and #$0f
 		beq mod				;前回書き込んだ音色と同じならスキップ
 		lda #%10000000
 		sta $4089			;Wavetable書き込み許可
