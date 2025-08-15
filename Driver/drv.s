@@ -1212,6 +1212,8 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 ; ------------------------------------------------------------------------
 .proc procnote
 		lda Frags, x
+		and #FRAG_IS_KEYON
+		beq @S				;キーオフしていたらスキップ
 		lda Gate, x
 		and #%00111111
 		sta Work
@@ -1223,6 +1225,7 @@ FdsModFreq_H:	.res	1	;モジュレータの周波数H＋上位1bitに同期フ�
 		beq @G1				;10ならu
 		cmp #%11000000
 		beq @G2				;11ならQ
+	@S:
 		lda LenCtr, x
 		sta GateCtr, x
 		jmp next
