@@ -203,6 +203,7 @@ YPOS5 = $A7
 	;Duty
 	@duty:
 		lda Tone, x
+		and #$0f
 		clc
 		adc #$2b
 		sta PTone + 0
@@ -325,6 +326,7 @@ YPOS5 = $A7
 	;Duty
 	@duty:
 		lda Tone, x
+		and #$0f
 		clc
 		adc #$2b
 		sta PTone + 1
@@ -494,6 +496,7 @@ YPOS5 = $A7
 	;音色
 	@tone:
 		lda Tone, x
+		and #$0f
 		bne @p
 		lda #$43
 		sta PTone + 2
