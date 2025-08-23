@@ -1,4 +1,5 @@
 #include <iostream>
+#include <atlstr.h>
 #include "MMLReader.h"
 #include "FileWriter.h"
 
@@ -19,8 +20,29 @@ int wmain(int argc, wchar_t* argv[])
     bool raw = false;
     bool nes = false;
 
+    WCHAR             fileName[MAX_PATH + 1];
+    DWORD             size;
+    BYTE* pVersion;
+    VS_FIXEDFILEINFO* pFileInfo;
+    UINT              queryLen;
+    std::wstring      fileVersion;
+
+    ::GetModuleFileName(NULL, fileName, MAX_PATH);
+
+    size = ::GetFileVersionInfoSize(fileName, NULL);
+    pVersion = new BYTE[size];
+    if (::GetFileVersionInfo(fileName, NULL, size, pVersion)) {
+        ::VerQueryValue(pVersion, _T("\\"), (void**)&pFileInfo, &queryLen);
+
+        fileVersion = std::format(_T("{0}.{1}.{2}"),
+            HIWORD(pFileInfo->dwFileVersionMS),
+            LOWORD(pFileInfo->dwFileVersionMS),
+            HIWORD(pFileInfo->dwFileVersionLS));
+    }
+    delete[] pVersion;
+
     std::wcout.imbue(std::locale("Japanese"));
-    std::wcout << "FamiDriver CLI Compiler v0.3.4  (c) theta 2024-2025" << std::endl;
+    std::wcout << "FamiDriverCLI MML Compiler v" << fileVersion << " (c)theta 2024 - 2025" << std::endl;
     std::wcout << std::endl;
 
     if (argc < 2)
