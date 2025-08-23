@@ -40,47 +40,54 @@ __ss:		.byte	$30
 __m:		.byte	$30
 __mm:		.byte	$30
 
+POctHead:		.res	3
 POctave:		.res	3
 PNote:			.res	3
 PSharp:			.res	3
-PTone:			.res	3
+PToneL:			.res	3
+PToneR:			.res	3
+PTone4:			.res	1
 PVolume:		.res	2
+PVolumeNum:		.res	2
 
-PAFreq_L:		.res	3
-PAFreq_H:		.res	3
 PANote:			.res	2
 PAVolume:		.res	4
-CurTrack:		.res	1
 
 DMA = $0700
 
 CH1 = 0
-CH2 = CH1 + 12
-CH3 = CH2 + 12
+CH2 = CH1 + 20
+CH3 = CH2 + 20
 CH4 = CH3 + 4
-CH5 = CH4 + 12
+CH5 = CH4 + 20
 
 CH1KEY		=	DMA + 0
 CH1VOL1		=	DMA + 4
 CH1VOL2		=	DMA + 8
+CH1VOL3		=	DMA + 12
+CH1VOL4		=	DMA + 16
 
 CH2KEY		=	DMA + CH2 + 0
 CH2VOL1		=	DMA + CH2 + 4
 CH2VOL2		=	DMA + CH2 + 8
+CH2VOL3		=	DMA + CH2 + 12
+CH2VOL4		=	DMA + CH2 + 16
 
 CH3KEY		=	DMA + CH3 + 0
 
 CH4KEY		=	DMA + CH4 + 0
 CH4VOL1		=	DMA + CH4 + 4
 CH4VOL2		=	DMA + CH4 + 8
+CH4VOL3		=	DMA + CH4 + 12
+CH4VOL4		=	DMA + CH4 + 16
 
 CH5KEY		=	DMA + CH5 + 0
 
-YPOS1 = $2F
-YPOS2 = $4F
-YPOS3 = $6F
-YPOS4 = $8F
-YPOS5 = $A7
+YPOS1 = $2f
+YPOS2 = $47
+YPOS3 = $5f
+YPOS4 = $8f
+YPOS5 = $a7
 
 .code
 
@@ -89,43 +96,37 @@ YPOS5 = $A7
 	;----------------ch1----------------
 	ch01:
 		lda #0
-		sta CurTrack
 		sta DspWork
 		jsr gettrack
 		cmp #1
-		beq @exec
-		jmp ch02
-	@exec:
-		stx CurTrack
-		lda Volume, x
-		bne @keyon
+		beq @keyon
+	@keyoff:
 		lda #$ff
 		sta CH1KEY + 0
-		lda #$88
+		lda #$b8
 		sta CH1VOL1 + 3
-		lda #$90
+		lda #$c0
 		sta CH1VOL2 + 3
+		lda #$c8
+		sta CH1VOL3 + 3
+		lda #$d0
+		sta CH1VOL4 + 3
 		lda #YPOS1
 		sta CH1VOL1 + 0
 		sta CH1VOL2 + 0
+		sta CH1VOL3 + 0
+		sta CH1VOL4 + 0
+		lda #$02
+		sta POctHead + 0
+		sta POctave + 0
+		sta PNote + 0
+		sta PSharp + 0
 		jmp ch02
 	;発音中の場合
 	@keyon:
-		lda #YPOS1 + 16			;ハイライト鍵盤を表示
+		lda #YPOS1 + 8			;ハイライト鍵盤を表示
 		sta CH1KEY + 0
-		lda PAFreq_H + 0
-		cmp Freq_H, x
-		bne @f2n
-		lda PAFreq_L + 0
-		cmp Freq_L, x
-		bne @f2n
-		jmp @volume
-	@f2n:
 		jsr freq2note
-		lda Freq_L, x
-		sta PAFreq_L + 0
-		lda Freq_H, x
-		sta PAFreq_H + 0
 	;鍵盤の位置計算
 	@pos:
 		lda #0
@@ -147,6 +148,8 @@ YPOS5 = $A7
 		sta POctave + 0				;オクターブ番号
 		lda charmap, y
 		sta PNote + 0				;音名
+		lda #$44
+		sta POctHead + 0
 	@note:
 		lda DspWork + 3
 		tay
@@ -176,39 +179,37 @@ YPOS5 = $A7
 		lda Volume, x
 		cmp PAVolume + 0
 		beq @duty
-		cmp #15
-		bcc @next1
-		lda #$ff
-		sta CH1VOL1 + 0
-		jmp @spr2
-	@next1:
+		asl
 		clc
-		lda Volume, x
-		adc #$88
+		adc #$b8
 		sta CH1VOL1 + 3		;音量バー隠しのスプライト位置1
-		lda #YPOS1
-		sta CH1VOL1 + 0
-	@spr2:
-		lda Volume, x
-		cmp #9
-		bcc @next2
-		lda #$ff
-		sta CH1VOL2 + 0
-		jmp @duty
-	@next2:
-		lda Volume, x
 		clc
-		adc #$90
+		adc #8
 		sta CH1VOL2 + 3		;音量バー隠しのスプライト位置2
-		lda #YPOS1
-		sta CH1VOL2 + 0
+		clc
+		adc #8
+		sta CH1VOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta CH1VOL4 + 3		;音量バー隠しのスプライト位置4
 	;Duty
 	@duty:
 		lda Tone, x
 		and #$0f
+		cmp #3
+		beq @rev
 		clc
-		adc #$2b
-		sta PTone + 0
+		adc #$2a
+		sta PToneL + 0
+		lda #$2e
+		sta PToneR + 0
+		jmp ch02
+	@rev:
+		clc
+		adc #$2a
+		sta PToneR + 0
+		lda #$2f
+		sta PToneL + 0
 
 	;----------------ch2----------------
 	ch02:
@@ -216,39 +217,29 @@ YPOS5 = $A7
 		sta DspWork
 		jsr gettrack
 		cmp #1
-		beq @exec
-		jmp ch03
-	@exec:
-		stx CurTrack
-		lda Volume, x
-		bne @keyon
+		beq @keyon
+	@keyoff:
 		lda #$ff
 		sta CH2KEY + 0
-		lda #$88
+		lda #$b8
 		sta CH2VOL1 + 3
-		lda #$90
+		lda #$c0
 		sta CH2VOL2 + 3
-		lda #YPOS2
-		sta CH2VOL1 + 0
-		sta CH2VOL2 + 0
+		lda #$c8
+		sta CH2VOL3 + 3
+		lda #$d0
+		sta CH2VOL4 + 3
+		lda #$02
+		sta POctHead + 1
+		sta POctave + 1
+		sta PNote + 1
+		sta PSharp + 1
 		jmp ch03
 	;発音中の場合
 	@keyon:
-		lda #YPOS2 + 16			;ハイライト鍵盤を表示
+		lda #YPOS2 + 8			;ハイライト鍵盤を表示
 		sta CH2KEY + 0
-		lda PAFreq_H + 1
-		cmp Freq_H, x
-		bne @f2n
-		lda PAFreq_L + 1
-		cmp Freq_L, x
-		bne @f2n
-		jmp @volume
-	@f2n:
 		jsr freq2note
-		lda Freq_L, x
-		sta PAFreq_L + 1
-		lda Freq_H, x
-		sta PAFreq_H + 1
 	;鍵盤の位置計算
 	@pos:
 		lda #0
@@ -270,6 +261,8 @@ YPOS5 = $A7
 		sta POctave + 1				;オクターブ番号
 		lda charmap, y
 		sta PNote + 1				;音名
+		lda #$44
+		sta POctHead + 1
 	@note:
 		lda DspWork + 3
 		tay
@@ -299,39 +292,37 @@ YPOS5 = $A7
 		lda Volume, x
 		cmp PAVolume + 1
 		beq @duty
-		cmp #15
-		bcc @next1
-		lda #$ff
-		sta CH2VOL1 + 0
-		jmp @spr2
-	@next1:
+		asl
 		clc
-		lda Volume, x
-		adc #$88
+		adc #$b8
 		sta CH2VOL1 + 3		;音量バー隠しのスプライト位置1
-		lda #YPOS2
-		sta CH2VOL1 + 0
-	@spr2:
-		lda Volume, x
-		cmp #9
-		bcc @next2
-		lda #$ff
-		sta CH2VOL2 + 0
-		jmp @duty
-	@next2:
-		lda Volume, x
 		clc
-		adc #$90
+		adc #8
 		sta CH2VOL2 + 3		;音量バー隠しのスプライト位置2
-		lda #YPOS2
-		sta CH2VOL2 + 0
+		clc
+		adc #8
+		sta CH2VOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta CH2VOL4 + 3		;音量バー隠しのスプライト位置4
 	;Duty
 	@duty:
 		lda Tone, x
 		and #$0f
+		cmp #3
+		beq @rev
 		clc
-		adc #$2b
-		sta PTone + 1
+		adc #$2a
+		sta PToneL + 1
+		lda #$2e
+		sta PToneR + 1
+		jmp ch03
+	@rev:
+		clc
+		adc #$2a
+		sta PToneR + 1
+		lda #$2f
+		sta PToneL + 1
 
 	;----------------ch3----------------
 	ch03:
@@ -339,34 +330,24 @@ YPOS5 = $A7
 		sta DspWork
 		jsr gettrack
 		cmp #1
-		beq @exec
-		jmp ch04
-	@exec:
-		stx CurTrack
-		lda Volume, x
-		bne @keyon
+		beq @keyon
+	@keyoff:
 		lda #$ff
 		sta CH3KEY + 0
-		lda #$02
-		sta PVolume + 0
+		lda PVolume + 0
+		beq :+
+		dec PVolume + 0
+	:	lda #$02
+		sta POctHead + 2
+		sta POctave + 2
+		sta PNote + 2
+		sta PSharp + 2
 		jmp ch04
 	;発音中の場合
 	@keyon:
-		lda #YPOS3 + 16			;ハイライト鍵盤を表示
+		lda #YPOS3 + 8			;ハイライト鍵盤を表示
 		sta CH3KEY + 0
-		lda PAFreq_H + 2
-		cmp Freq_H, x
-		bne @f2n
-		lda PAFreq_L + 2
-		cmp Freq_L, x
-		bne @f2n
-		jmp @volume
-	@f2n:
 		jsr freq2note
-		lda Freq_L, x
-		sta PAFreq_L + 2
-		lda Freq_H, x
-		sta PAFreq_H + 2
 	;鍵盤の位置計算
 	@pos:
 		lda #0
@@ -389,6 +370,8 @@ YPOS5 = $A7
 		sta POctave + 2			;オクターブ番号
 		lda charmap, y
 		sta PNote + 2			;音名
+		lda #$44
+		sta POctHead + 2
 	@note:
 		lda DspWork + 3
 		tay
@@ -415,7 +398,7 @@ YPOS5 = $A7
 		sta CH3KEY + 1			;ハイライト鍵盤の形
 	;音量バー
 	@volume:
-		lda #$29
+		lda #4
 		sta PVolume + 0
 
 	;----------------ch4----------------
@@ -424,21 +407,18 @@ YPOS5 = $A7
 		sta DspWork
 		jsr gettrack
 		cmp #1
-		beq @exec
-		jmp ch05
-	@exec:
-		stx CurTrack
-		lda Volume, x
-		bne @keyon
+		beq @keyon
+	@keyoff:
 		lda #$ff
 		sta CH4KEY + 0
-		lda #$60
+		lda #$b8
 		sta CH4VOL1 + 3
-		lda #$68
+		lda #$c0
 		sta CH4VOL2 + 3
-		lda #YPOS4
-		sta CH4VOL1 + 0
-		sta CH4VOL2 + 0
+		lda #$c8
+		sta CH4VOL3 + 3
+		lda #$d0
+		sta CH4VOL4 + 3
 		jmp ch05
 	;発音中の場合
 	@keyon:
@@ -469,59 +449,43 @@ YPOS5 = $A7
 		lda Volume, x
 		cmp PAVolume + 3
 		beq @tone
-		cmp #15
-		bcc @next1
-		lda #$ff
-		sta CH4VOL1 + 0
-		jmp @spr2
-	@next1:
+		asl
 		clc
-		lda Volume, x
-		adc #$60
+		adc #$b8
 		sta CH4VOL1 + 3		;音量バー隠しのスプライト位置1
-		lda #YPOS4
-		sta CH4VOL1 + 0
-	@spr2:
-		lda Volume, x
-		cmp #9
-		bcc @next2
-		lda #$ff
-		sta CH4VOL2 + 0
-		jmp @tone
-	@next2:
-		lda Volume, x
 		clc
-		adc #$68
+		adc #8
 		sta CH4VOL2 + 3		;音量バー隠しのスプライト位置2
-		lda #YPOS4
-		sta CH4VOL2 + 0
+		clc
+		adc #8
+		sta CH4VOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta CH4VOL4 + 3		;音量バー隠しのスプライト位置4
 	;音色
 	@tone:
 		lda Tone, x
 		and #$0f
 		bne @p
 		lda #$43
-		sta PTone + 2
+		sta PTone4
 		jmp ch05
 	@p:
 		lda #$45
-		sta PTone + 2
+		sta PTone4
 	
 	;----------------ch5----------------
 	ch05:
 		lda #4
 		sta DspWork
 		jsr gettrack
-		cmp #1
-		beq @exec
-		jmp end
-	@exec:
 		lda $4015
 		and #%00010000					;DPCM再生bitを直接読む
 		bne @keyon
-		lda #$02
-		sta PVolume + 1
-		lda #$ff
+		lda PVolume + 1
+		beq :+
+		dec PVolume + 1
+	:	lda #$ff
 		sta CH5KEY + 0
 		jmp end
 	;発音中の場合
@@ -547,7 +511,7 @@ YPOS5 = $A7
 		adc #$58
 		sta CH5KEY + 3				;ハイライト鍵盤の位置
 	@volume:
-		lda #$29
+		lda #4
 		sta PVolume + 1
 	end:
 		rts
@@ -557,27 +521,33 @@ YPOS5 = $A7
 ;アクティブな音源があるかどうかを調べて
 ;aに結果、xにトラック番号を入れて返す
 .proc gettrack
-		ldx CurTrack
-	@L:
+		ldx #LAST_TRACK
+		stx DspWork + 1
+	@loop:
 		lda Device, x
 		cmp DspWork
-		beq @N
-		bcs false			;目的の番号より大きくなったら打ち切る
-		inx
-		jmp @M
-	@N:
+		beq @exec
+		bcc false			;目的の番号より小さくなったら打ち切る
+		dex
+		bmi false
+		stx DspWork + 1
+		jmp @loop
+	@exec:
 		lda Frags, x
 		and #FRAG_END
-		beq true
-		inx
-	@M:
-		cpx #MAX_TRACK
-		bcc @L
-		jmp false
+		bne @next
+		lda Volume, x
+		beq @next
+		jmp true
+	@next:
+		dex
+		bmi false
+		jmp @loop
 	true:
 		lda #1
 		rts
 	false:
+		ldx DspWork + 1
 		lda #0
 		rts
 .endproc
@@ -608,8 +578,10 @@ YPOS5 = $A7
 		;----------------ch1----------------
 		lda #$20
 		sta $2006
-		lda #$e7
+		lda #$d1
 		sta $2006
+		lda POctHead + 0
+		sta $2007
 		lda POctave + 0
 		sta $2007
 		lda PNote + 0
@@ -618,15 +590,19 @@ YPOS5 = $A7
 		sta $2007
 		lda #$20
 		sta $2006
-		lda #$d5
+		lda #$ce
 		sta $2006
-		lda PTone + 0
+		lda PToneL + 0
+		sta $2007
+		lda PToneR + 0
 		sta $2007
 		;----------------ch2----------------
 		lda #$21
 		sta $2006
-		lda #$67
+		lda #$31
 		sta $2006
+		lda POctHead + 1
+		sta $2007
 		lda POctave + 1
 		sta $2007
 		lda PNote + 1
@@ -635,43 +611,73 @@ YPOS5 = $A7
 		sta $2007
 		lda #$21
 		sta $2006
-		lda #$55
+		lda #$2e
 		sta $2006
-		lda PTone + 1
+		lda PToneL + 1
+		sta $2007
+		lda PToneR + 1
 		sta $2007
 		;----------------ch3----------------
 		lda #$21
 		sta $2006
-		lda #$d1
+		lda #$91
 		sta $2006
-		lda PVolume + 0
+		lda POctHead + 2
 		sta $2007
-		sta $2007
-		lda #$21
-		sta $2006
-		lda #$e7
-		sta $2006
 		lda POctave + 2
 		sta $2007
 		lda PNote + 2
 		sta $2007
 		lda PSharp + 2
 		sta $2007
+		lda #$21
+		sta $2006
+		lda #$97
+		sta $2006
+		lda #$02
+		sta $2007
+		sta $2007
+		sta $2007
+		sta $2007
+		lda #$21
+		sta $2006
+		lda #$97
+		sta $2006
+		lda #$29
+		ldx PVolume + 0
+		beq @ch04
+	:	sta $2007
+		dex
+		bne :-
 		;----------------ch4----------------
+	@ch04:
 		lda #$22
 		sta $2006
-		lda #$4f
+		lda #$4b
 		sta $2006
-		lda PTone + 2
+		lda PTone4
 		sta $2007
 		;----------------ch5----------------
 		lda #$22
 		sta $2006
-		lda #$ac
+		lda #$b7
 		sta $2006
-		lda PVolume + 1
+		lda #$02
 		sta $2007
 		sta $2007
+		sta $2007
+		sta $2007
+		lda #$22
+		sta $2006
+		lda #$b7
+		sta $2006
+		lda #$29
+		ldx PVolume + 1
+		beq @end
+	:	sta $2007
+		dex
+		bne :-
+	@end:
 		rts
 .endproc
 
@@ -684,7 +690,7 @@ YPOS5 = $A7
 		sta __m
 		sta __mm
 		lda #$02
-		ldx #14
+		ldx #2
 	@L:
 		sta POctave, x
 		dex
@@ -798,23 +804,19 @@ YPOS5 = $A7
 		jsr pulse
 		lda #$20
 		sta $2006
+		lda #$d6
+		sta $2006
+		lda #$28
+		sta $2007
+		lda #$20
+		sta $2006
 		lda #$e6
-		sta $2006
-		lda #$44
-		sta $2007
-		lda #$30
-		sta $2007
-		lda #$3e
-		sta $2007
-		lda #$21
-		sta $2006
-		lda #$06
 		sta $2006
 		jsr key
 		;ch02
 		lda #$21
 		sta $2006
-		lda #$46
+		lda #$26
 		sta $2006
 		lda #$0b
 		sta $2007
@@ -825,23 +827,19 @@ YPOS5 = $A7
 		jsr pulse
 		lda #$21
 		sta $2006
-		lda #$66
+		lda #$36
 		sta $2006
-		lda #$44
-		sta $2007
-		lda #$30
-		sta $2007
-		lda #$3e
+		lda #$28
 		sta $2007
 		lda #$21
 		sta $2006
-		lda #$86
+		lda #$46
 		sta $2006
 		jsr key
 		;ch03
 		lda #$21
 		sta $2006
-		lda #$c6
+		lda #$86
 		sta $2006
 		lda #$0b
 		sta $2007
@@ -857,17 +855,29 @@ YPOS5 = $A7
 		inx
 		cpx #$20
 		bcc @L2
+		lda #$21
+		sta $2006
+		lda #$96
+		sta $2006
 		lda #$28
 		sta $2007
 		lda #$21
 		sta $2006
+		lda #$a6
+		sta $2006
+		jsr key
+		;chEXP
+		lda #$21
+		sta $2006
 		lda #$e6
 		sta $2006
-		lda #$44
+		lda #$0b
 		sta $2007
-		lda #$30
+		lda #$60
 		sta $2007
-		lda #$3e
+		lda #$61
+		sta $2007
+		lda #$62
 		sta $2007
 		lda #$22
 		sta $2006
@@ -885,12 +895,15 @@ YPOS5 = $A7
 		sta $2007
 		lda #$13
 		sta $2007
-		lda #$02
-		sta $2007
-		sta $2007
+		lda #$22
+		sta $2006
+		lda #$56
+		sta $2006
 		lda #$28
 		sta $2007
 		lda #$29
+		sta $2007
+		sta $2007
 		sta $2007
 		sta $2007
 		lda #$22
@@ -922,9 +935,10 @@ YPOS5 = $A7
 		sta $2007
 		lda #$15
 		sta $2007
-		lda #$02
-		sta $2007
-		sta $2007
+		lda #$22
+		sta $2006
+		lda #$b6
+		sta $2006
 		lda #$28
 		sta $2007
 		lda #$22
@@ -1019,57 +1033,94 @@ YPOS5 = $A7
 		lda #YPOS1
 		sta CH1VOL1 + 0
 		sta CH1VOL2 + 0
+		sta CH1VOL3 + 0
+		sta CH1VOL4 + 0
 		
 		lda #$02
 		sta CH1VOL1 + 1
 		sta CH1VOL2 + 1
+		sta CH1VOL3 + 1
+		sta CH1VOL4 + 1
 		
-		lda #$88
+		lda #$b8
 		sta CH1VOL1 + 3
-		lda #$90
+		lda #$c0
 		sta CH1VOL2 + 3
+		lda #$c8
+		sta CH1VOL3 + 3
+		lda #$d0
+		sta CH1VOL4 + 3
 		
 		;ch2
 		lda #YPOS2
 		sta CH2VOL1 + 0
 		sta CH2VOL2 + 0
+		sta CH2VOL3 + 0
+		sta CH2VOL4 + 0
 		
 		lda #$02
 		sta CH2VOL1 + 1
 		sta CH2VOL2 + 1
+		sta CH2VOL3 + 1
+		sta CH2VOL4 + 1
 		
-		lda #$88
+		lda #$b8
 		sta CH2VOL1 + 3
-		lda #$90
+		lda #$c0
 		sta CH2VOL2 + 3
+		lda #$c8
+		sta CH2VOL3 + 3
+		lda #$d0
+		sta CH2VOL4 + 3
 		
 		;ch3
 		;ch4
 		lda #YPOS4
 		sta CH4VOL1 + 0
 		sta CH4VOL2 + 0
+		sta CH4VOL3 + 0
+		sta CH4VOL4 + 0
 		
 		lda #$5f
 		sta CH4KEY + 1
 		lda #$02
 		sta CH4VOL1 + 1
 		sta CH4VOL2 + 1
+		sta CH4VOL3 + 1
+		sta CH4VOL4 + 1
 		
-		lda #$60
+		lda #$b8
 		sta CH4VOL1 + 3
-		lda #$68
+		lda #$c0
 		sta CH4VOL2 + 3
+		lda #$c8
+		sta CH4VOL3 + 3
+		lda #$d0
+		sta CH4VOL4 + 3
 		
 		;ch5
 		lda #$5f
 		sta CH5KEY + 1
 		
 		;BG書き換えの変数初期化
-		lda #$30
+		lda #$02
+		sta POctHead + 0
+		sta POctHead + 1
+		sta POctHead + 2
+		
 		sta POctave + 0
 		sta POctave + 1
 		sta POctave + 2
 
+		sta PVolume + 0
+		sta PVolume + 1
+		
+		sta PToneL + 0
+		sta PToneL + 1
+		sta PToneR + 0
+		sta PToneR + 1
+		sta PTone4
+		
 		lda #$3e
 		sta PNote + 0
 		sta PNote + 1
@@ -1095,22 +1146,23 @@ YPOS5 = $A7
 		lda #$02
 		sta $2007
 		ldx #$16
-	@L2:
+	@L:
 		stx $2007
 		inx
 		cpx #$1a
-		bcc @L2
+		bcc @L
+		ldx #$08
 		lda #$02
+	@L2:
 		sta $2007
-		sta $2007
+		dex
+		bne @L2
 		lda #$28
 		sta $2007
 		lda #$29
 		sta $2007
 		sta $2007
-		lda #$02
 		sta $2007
-		lda #$2a
 		sta $2007
 		rts
 .endproc
