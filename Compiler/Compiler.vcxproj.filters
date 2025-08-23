@@ -73,4 +73,9 @@
     <Text Include="..\Readme.txt" />
     <Text Include="..\説明書.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="famidrvc.rc">
+      <Filter>リソース ファイル</Filter>
+    </ResourceCompile>
+  </ItemGroup>
 </Project>
