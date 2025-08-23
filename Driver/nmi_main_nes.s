@@ -34,11 +34,8 @@
 
 	lda DrvFrags
 	and #DRV_INIT | DRV_IS_FREE
-	beq Count
+	beq end
 
-	lda #0
-	sta sync
-	
 	jsr dsp_write
 	;スクロール位置
 	lda	#0
@@ -50,9 +47,6 @@
 	
 	jsr dsp_main
 	jsr drv_main
-	
-	lda #1
-	sta sync
 	
 ;---------------------------------------
 ; Count-up
