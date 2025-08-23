@@ -1,3 +1,5 @@
+;FamiDriverCLI NES Sound Driver v0.3.4
+
 .exportzp	Frags
 .export		DrvFrags
 .export		Device
