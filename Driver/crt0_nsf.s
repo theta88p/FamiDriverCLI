@@ -13,8 +13,6 @@
 
 .segment	"STARTUP"
 
-.byte	"DRFM  "
-
 start:
 
 	sei

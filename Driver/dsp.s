@@ -21,14 +21,12 @@
 .export		__ss
 .export		__m
 .export		__mm
-.export		sync
 
 .include 	"drv.inc"
 
 
 .zeropage
 
-sync:		.byte	1
 DspWork:	.res	4
 
 .bss
@@ -48,7 +46,7 @@ PToneL:			.res	3
 PToneR:			.res	3
 PTone4:			.res	1
 PVolume:		.res	2
-PVolumeNum:		.res	2
+ExpVolume:		.res	1
 
 PANote:			.res	2
 PAVolume:		.res	4
@@ -60,6 +58,7 @@ CH2 = CH1 + 20
 CH3 = CH2 + 20
 CH4 = CH3 + 4
 CH5 = CH4 + 20
+EXP1 = CH5 + 4
 
 CH1KEY		=	DMA + 0
 CH1VOL1		=	DMA + 4
@@ -83,11 +82,20 @@ CH4VOL4		=	DMA + CH4 + 16
 
 CH5KEY		=	DMA + CH5 + 0
 
+EXP1KEY = DMA + EXP1 + 0
+EXP2KEY = DMA + EXP1 + 4
+EXP3KEY = DMA + EXP1 + 8
+EXPVOL1 = DMA + EXP1 + 12
+EXPVOL2 = DMA + EXP1 + 16
+EXPVOL3 = DMA + EXP1 + 20
+EXPVOL4 = DMA + EXP1 + 24
+
 YPOS1 = $2f
 YPOS2 = $47
 YPOS3 = $5f
 YPOS4 = $8f
 YPOS5 = $a7
+YPOS_EXP = $77
 
 .code
 
@@ -168,12 +176,16 @@ YPOS5 = $a7
 		lda #$5c
 	@write:
 		sta CH1KEY + 1			;ハイライト鍵盤の形
+		lda #%00000000
+		sta CH1KEY + 2			;パレット番号
 		jmp @volume
 	@half:
 		lda #$3b
 		sta PSharp + 0				;シャープ記号
 		lda #$5e
 		sta CH1KEY + 1			;ハイライト鍵盤の形
+		lda #%00000010
+		sta CH1KEY + 2			;パレット番号
 	;音量バー
 	@volume:
 		lda Volume, x
@@ -281,12 +293,16 @@ YPOS5 = $a7
 		lda #$5c
 	@write:
 		sta CH2KEY + 1			;ハイライト鍵盤の形
+		lda #%00000000
+		sta CH2KEY + 2			;パレット番号
 		jmp @volume
 	@half:
 		lda #$3b
 		sta PSharp + 1				;シャープ記号
 		lda #$5e
 		sta CH2KEY + 1			;ハイライト鍵盤の形
+		lda #%00000010
+		sta CH2KEY + 2			;パレット番号
 	;音量バー
 	@volume:
 		lda Volume, x
@@ -390,12 +406,16 @@ YPOS5 = $a7
 		lda #$5c
 	@write:
 		sta CH3KEY + 1			;ハイライト鍵盤の形
+		lda #%00000000
+		sta CH3KEY + 2			;パレット番号
 		jmp @volume
 	@half:
 		lda #$3b
 		sta PSharp + 2				;シャープ記号
 		lda #$5e
 		sta CH3KEY + 1			;ハイライト鍵盤の形
+		lda #%00000010
+		sta CH3KEY + 2			;パレット番号
 	;音量バー
 	@volume:
 		lda #4
@@ -487,7 +507,7 @@ YPOS5 = $a7
 		dec PVolume + 1
 	:	lda #$ff
 		sta CH5KEY + 0
-		jmp end
+		jmp exp
 	;発音中の場合
 	@keyon:
 		lda #YPOS5 + 8
@@ -513,6 +533,201 @@ YPOS5 = $a7
 	@volume:
 		lda #4
 		sta PVolume + 1
+
+	exp:
+.ifdef VRC6
+	;---------------VRC6 ch1---------------
+		lda #5
+		sta DspWork
+		jsr gettrack
+		cmp #1
+		beq @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP1KEY + 0
+		jmp vrc6_02
+	;発音中の場合
+	@keyon:
+		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
+		sta EXP1KEY + 0
+		jsr freq2note
+	;鍵盤の位置計算
+	@pos:
+		lda #0
+		ldy DspWork + 2
+	@L:
+		clc
+		adc #21
+		dey
+		bne @L
+		adc #$30
+		ldy DspWork + 3
+		adc posmap, y
+		sta EXP1KEY + 3			;ハイライト鍵盤の位置
+	;半音計算
+	@note:
+		lda DspWork + 3
+		tay
+		lda halftone, y
+		bne @half
+		lda DspWork + 3
+		cmp #4
+		beq @sqr
+		cmp #11
+		beq @sqr
+		lda #$5d
+		jmp @write
+	@sqr:
+		lda #$5c
+	@write:
+		sta EXP1KEY + 1			;ハイライト鍵盤の形
+		lda #%00000000
+		sta EXP1KEY + 2			;パレット番号
+		jmp @volume
+	@half:
+		lda #$5e
+		sta EXP1KEY + 1			;ハイライト鍵盤の形
+		lda #%00000010
+		sta EXP1KEY + 2			;パレット番号
+	@volume:
+		lda Volume, x
+		sta ExpVolume
+	;--------------VRC6 ch2--------------
+	vrc6_02:
+		lda #6
+		sta DspWork
+		jsr gettrack
+		cmp #1
+		beq @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP2KEY + 0
+		jmp vrc6_saw
+	;発音中の場合
+	@keyon:
+		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
+		sta EXP2KEY + 0
+		jsr freq2note
+	;鍵盤の位置計算
+	@pos:
+		lda #0
+		ldy DspWork + 2
+	@L:
+		clc
+		adc #21
+		dey
+		bne @L
+		adc #$30
+		ldy DspWork + 3
+		adc posmap, y
+		sta EXP2KEY + 3			;ハイライト鍵盤の位置
+	;半音計算
+	@note:
+		lda DspWork + 3
+		tay
+		lda halftone, y
+		bne @half
+		lda DspWork + 3
+		cmp #4
+		beq @sqr
+		cmp #11
+		beq @sqr
+		lda #$5d
+		jmp @write
+	@sqr:
+		lda #$5c
+	@write:
+		sta EXP2KEY + 1			;ハイライト鍵盤の形
+		lda #%00000000
+		sta EXP2KEY + 2			;パレット番号
+		jmp @volume
+	@half:
+		lda #$5e
+		sta EXP2KEY + 1			;ハイライト鍵盤の形
+		lda #%00000010
+		sta EXP2KEY + 2			;パレット番号
+	@volume:
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+		;--------------VRC6 saw--------------
+	vrc6_saw:
+		lda #7
+		sta DspWork
+		jsr gettrack
+		cmp #1
+		beq @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP3KEY + 0
+		jmp @volume
+	;発音中の場合
+	@keyon:
+		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
+		sta EXP3KEY + 0
+		jsr freq2note_saw
+	;鍵盤の位置計算
+	@pos:
+		lda #0
+		ldy DspWork + 2
+	@L:
+		clc
+		adc #21
+		dey
+		bne @L
+		adc #$30
+		ldy DspWork + 3
+		adc posmap, y
+		sta EXP3KEY + 3			;ハイライト鍵盤の位置
+	;半音計算
+	@note:
+		lda DspWork + 3
+		tay
+		lda halftone, y
+		bne @half
+		lda DspWork + 3
+		cmp #4
+		beq @sqr
+		cmp #11
+		beq @sqr
+		lda #$5d
+		jmp @write
+	@sqr:
+		lda #$5c
+	@write:
+		sta EXP3KEY + 1			;ハイライト鍵盤の形
+		lda #%00000001
+		sta EXP3KEY + 2			;パレット番号
+		jmp @volume
+	@half:
+		lda #$5e
+		sta EXP3KEY + 1			;ハイライト鍵盤の形
+		lda #%00000011
+		sta EXP3KEY + 2			;パレット番号
+		;--------------VRC6 Volume--------------
+	@volume:
+		lda Volume, x
+		lsr
+		clc
+		adc ExpVolume
+		lsr
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3		;音量バー隠しのスプライト位置1
+		clc
+		adc #8
+		sta EXPVOL2 + 3		;音量バー隠しのスプライト位置2
+		clc
+		adc #8
+		sta EXPVOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta EXPVOL4 + 3		;音量バー隠しのスプライト位置4
+		lda #0
+		sta ExpVolume
+.endif
+
 	end:
 		rts
 .endproc
@@ -879,6 +1094,25 @@ YPOS5 = $a7
 		sta $2007
 		lda #$62
 		sta $2007
+.ifdef VRC6
+		lda #$63
+		sta $2007
+		lda #$64
+		sta $2007
+		lda #$65
+		sta $2007
+		lda #$21
+		sta $2006
+		lda #$f6
+		sta $2006
+		lda #$28
+		sta $2007
+		lda #$29
+		sta $2007
+		sta $2007
+		sta $2007
+		sta $2007
+.endif
 		lda #$22
 		sta $2006
 		lda #$06
@@ -1101,8 +1335,39 @@ YPOS5 = $a7
 		;ch5
 		lda #$5f
 		sta CH5KEY + 1
+
+.ifdef VRC6
+		lda #$ff
+		sta EXP1KEY + 0
+		sta EXP2KEY + 0
+		sta EXP3KEY + 0
+		lda #YPOS_EXP
+		sta EXPVOL1 + 0
+		sta EXPVOL2 + 0
+		sta EXPVOL3 + 0
+		sta EXPVOL4 + 0
+		lda #$02
+		sta EXPVOL1 + 1
+		sta EXPVOL2 + 1
+		sta EXPVOL3 + 1
+		sta EXPVOL4 + 1
+		lda #$b8
+		sta EXPVOL1 + 3
+		lda #$c0
+		sta EXPVOL2 + 3
+		lda #$c8
+		sta EXPVOL3 + 3
+		lda #$d0
+		sta EXPVOL4 + 3
+		lda #%00000001
+		sta EXP3KEY + 2
+.endif
 		
 		;BG書き換えの変数初期化
+		lda #00
+		sta PVolume + 0
+		sta PVolume + 1
+		
 		lda #$02
 		sta POctHead + 0
 		sta POctHead + 1
@@ -1112,8 +1377,6 @@ YPOS5 = $a7
 		sta POctave + 1
 		sta POctave + 2
 
-		sta PVolume + 0
-		sta PVolume + 1
 		
 		sta PToneL + 0
 		sta PToneL + 1
@@ -1121,10 +1384,13 @@ YPOS5 = $a7
 		sta PToneR + 1
 		sta PTone4
 		
-		lda #$3e
 		sta PNote + 0
 		sta PNote + 1
 		sta PNote + 2
+		
+		sta PSharp + 0
+		sta PSharp + 1
+		sta PSharp + 2
 		
 		;スプライト転送
 		lda #$07
@@ -1193,9 +1459,9 @@ YPOS5 = $a7
 
 
 .proc freq2note
-		lda Freq_H, x
-		bne start
 		lda Freq_L, x
+		bne start
+		lda Freq_H, x
 		bne start
 		rts
 	start:
@@ -1233,8 +1499,7 @@ YPOS5 = $a7
 		bne @E
 		lda DspWork
 		cmp #$36				;レジスタ値が$34(52)+2より小さくなるまでオクターブを上げる
-		bcs @E
-		jmp next
+		bcc next
 	@E:
 		lsr DspWork + 1
 		ror DspWork
@@ -1255,6 +1520,70 @@ YPOS5 = $a7
 		rts
 .endproc
 
+.ifdef VRC6
+.proc freq2note_saw
+		lda Freq_L, x
+		bne start
+		lda Freq_H, x
+		bne start
+		rts
+	start:
+		ldy #0
+		lda #0
+		lda Freq_L, x
+		sta DspWork
+		lda Freq_H, x
+		sta DspWork + 1
+		bne @L
+		lda DspWork
+		cmp #$10					;オクターブ9以上はo8b固定
+		bcc @o9
+		cmp #$1b					;オクターブ8以上は別処理
+		bcc @o8
+		jmp @L
+	@o9:
+		lda #8
+		sta DspWork + 2
+		lda #$0d
+		sta DspWork + 3
+		rts
+	@o8:
+		lda #8
+		sta DspWork + 2
+		lda DspWork
+		sec
+		sbc #$10				;レジスタ値$10がo8bなのでそれを0とする
+		tay
+		lda Freq_Note_Saw_H, y
+		sta DspWork + 3
+		rts
+	@L:
+		lda DspWork + 1
+		bne @E
+		lda DspWork
+		cmp #$40				;レジスタ値が$40+2より小さくなるまでオクターブを上げる
+		bcc next
+	@E:
+		lsr DspWork + 1
+		ror DspWork
+		iny
+		jmp @L
+	next:
+		sty DspWork + 2			;7-上げた数がオクターブ
+		lda #7
+		sec
+		sbc DspWork + 2
+		sta DspWork + 2
+		lda DspWork
+		sec
+		sbc #$1f				;レジスタ値$1fがo7bなのでそれを0とする
+		tay
+		lda Freq_Note_Saw, y
+		sta DspWork + 3
+		rts
+.endproc
+.endif
+
 .rodata
 ;ノートナンバーを位置に変換するテーブル
 posmap:
@@ -1269,7 +1598,7 @@ halftone:
 	.byte	0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0
 
 ;逆引きテーブル
-;o7b~07cまでのレジスタ値から音階を引ける
+;o7b~o7cまでのレジスタ値から音階を引ける
 Freq_Note:
 	.byte	$0b, $0a, $0a, $09, $09, $08, $08, $07, $07, $06, $06, $05, $05, $05, $04, $04
 	.byte	$03, $03, $03, $02, $02, $01, $01, $01, $00, $00, $00
@@ -1277,3 +1606,13 @@ Freq_Note:
 Freq_Note_H:
 	.byte	$0b, $0a, $09, $08, $07, $06, $05, $04
 	.byte	$04, $03, $02, $02, $01, $00, $00, $00
+
+.ifdef VRC6
+Freq_Note_Saw:
+	.byte	$0b, $0b, $0a, $0a, $09, $09, $08, $08, $07, $07, $06, $06, $06, $05, $05, $04
+	.byte	$04, $04, $03, $03, $03, $02, $02, $02, $01, $01, $01, $00, $00, $00, $00, $00
+
+Freq_Note_Saw_H:
+	.byte	$0b, $0a, $09, $08, $07, $06, $05, $05
+	.byte	$04, $03, $03, $02, $01, $01, $00, $00
+.endif

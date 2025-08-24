@@ -25,9 +25,9 @@ palette:
 	.byte	$0f, $13, $36, $30
 
 	.byte	$0f, $0c, $15, $25
-	.byte	$0f, $0c, $1c, $30
-	.byte	$0f, $27, $27, $27
-	.byte	$0f, $15, $25, $35
+	.byte	$0f, $0c, $11, $21
+	.byte	$0f, $0c, $25, $25
+	.byte	$0f, $0c, $21, $21
 
 ; パターンテーブル
 .segment "CHARS"

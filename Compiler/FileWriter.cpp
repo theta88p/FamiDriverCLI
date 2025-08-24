@@ -63,14 +63,46 @@ void FileWriter::createNes()
     std::ifstream ifs;
     std::wstring dir;
     Utils::GetModuleDir(dir);
-    std::wstring drv = dir + L"bin\\dsp_code.bin";
-    std::wstring data = dir + L"bin\\dsp_data.bin";
+    std::wstring drv = dir;
+    std::wstring data = dir;
+
+    if (extdevice & ExtDev::VRC6)
+    {
+        drv += L"bin\\dsp_vrc6_code.bin";
+        data += L"bin\\dsp_vrc6_data.bin";
+    }
+    else if (extdevice & ExtDev::VRC7)
+    {
+    }
+    else if (extdevice & ExtDev::FDS)
+    {
+        //drv += L"bin\\drv_fds.bin";
+    }
+    else if (extdevice & ExtDev::MMC5)
+    {
+        //drv += L"bin\\drv_mmc5.bin";
+    }
+    else if (extdevice & ExtDev::N163)
+    {
+    }
+    else if (extdevice & ExtDev::SS5B)
+    {
+        //drv += L"bin\\drv_ss5b.bin";
+    }
+    else
+    {
+        //2A03
+        drv += L"bin\\dsp_code.bin";
+		data += L"bin\\dsp_data.bin";
+    }
+
+
     auto drvsize = Utils::GetFileSize(drv);
 
     ifs.open(drv, std::ifstream::in | std::ifstream::binary);
     if (!ifs)
     {
-        std::cerr << "Faild to open dsp_code.bin." << std::endl;
+        std::cerr << "Faild to open dsp code." << std::endl;
         exit(1);
     }
 
@@ -85,8 +117,16 @@ void FileWriter::createNes()
     char c;
     int nesheadsize = 0x10;
     int dpcmaddr = 0x4000 + nesheadsize;
-    int vectoraddr = 0x7ffa + nesheadsize;
-    int maxfilesize = 0x7ff0 + nesheadsize;
+    int dpcmend = 0x7ffa + nesheadsize;
+
+    if (extdevice & ExtDev::VRC6)
+    {
+        neshead[0x04] = 0x02; //PRG16K x2
+        neshead[0x06] = 0x81; //VRC6
+		neshead[0x07] = 0x10; //VRC6
+        
+        dpcmend = 0x7d00 + nesheadsize;
+	}
 
 
     if (nesheadsize + drvsize + seqdata.size() > dpcmaddr + dpcmoffset)
@@ -160,10 +200,10 @@ void FileWriter::createNes()
         dpcmsize += file.size;
     }
 
-    if (dpcmaddr + dpcmsize + dpcmoffset > maxfilesize)
+    if (dpcmaddr + dpcmsize + dpcmoffset > dpcmend)
     {
         std::cerr << "DPCM data size has reached maximum." << std::endl;
-        std::cerr << "DPCM data : " << dpcmsize << " bytes, Max : " << maxfilesize - dpcmoffset - dpcmaddr << " bytes" << std::endl;
+        std::cerr << "DPCM data : " << dpcmsize << " bytes, Max : " << dpcmend - dpcmoffset - dpcmaddr << " bytes" << std::endl;
         exit(1);
     }
 
@@ -189,7 +229,7 @@ void FileWriter::createNes()
     }
 
     c = 0;
-    for (int i = dpcmaddr + dpcmsize; i < vectoraddr; i++)
+    for (int i = dpcmaddr + dpcmsize; i < dpcmend; i++)
     {
         if (ofs)
         {
@@ -206,7 +246,7 @@ void FileWriter::createNes()
     ifsc.open(data, std::ifstream::in | std::ifstream::binary);
     if (!ifs)
     {
-        std::cerr << "Faild to open dsp_data.bin." << std::endl;
+        std::cerr << "Faild to open dsp data." << std::endl;
         exit(1);
     }
 

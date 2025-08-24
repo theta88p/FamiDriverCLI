@@ -18,8 +18,6 @@
 
 .segment	"STARTUP"
 
-.byte	"DRFM  "
-
 start:
 
 	sei
@@ -27,6 +25,27 @@ start:
 
 	DISP_OFF
 
+.ifdef VRC6
+	lda #$00
+	sta $8000  ; CPU $8000-$BFFF = PRG banks 0 and 1
+	sta $9002  ; Silence all channels
+	sta $a002
+	sta $b002
+	lda #$20
+	sta $b003  ; Mirroring: Vertical
+	lda #$02
+	sta $c000  ; CPU $C000-$DFFF = PRG bank 2
+	lda #$00
+	sta $d000  ; CHR $0000-$0FFF = identity
+	lda #$01
+	sta $d001
+	lda #$02
+	sta $d002
+	lda #$03
+	sta $d003
+	lda #$00
+	sta $f001  ; disable IRQ
+.endif
 
 ;===============================
 ;	メモリ初期化
