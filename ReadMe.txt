@@ -1,5 +1,5 @@
 FamiDriverCLI - Famicom/NES Sound Driver & Compiler
-Copylight(c) 2024-2025 theta
+Copylight(c) 2024-2026 theta
 
 ・使い方
     コマンドプロンプトで以下を指定してください。
@@ -27,6 +27,11 @@ Copylight(c) 2024-2025 theta
 
 
 ・更新履歴
+  v0.3.5         2025/01/11
+    スイープと音量エンベロープを同時に使えるように修正
+    VRC6版DSPを追加
+    MMC5版DSPを追加
+
   v0.3.4         2025/08/17
     音量計算がおかしかったのを修正
     ループで途中終了した時オクターブ命令も飛ばすようにした

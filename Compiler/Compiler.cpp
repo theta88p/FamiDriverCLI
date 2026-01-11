@@ -42,7 +42,7 @@ int wmain(int argc, wchar_t* argv[])
     delete[] pVersion;
 
     std::wcout.imbue(std::locale("Japanese"));
-    std::wcout << "FamiDriverCLI MML Compiler v" << fileVersion << " (c)theta 2024 - 2025" << std::endl;
+    std::wcout << "FamiDriverCLI MML Compiler v" << fileVersion << " (c)theta 2024 - 2026" << std::endl;
     std::wcout << std::endl;
 
     if (argc < 2)
