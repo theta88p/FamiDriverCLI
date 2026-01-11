@@ -7,7 +7,7 @@ set DBG_DIR=..\Compiler\bin\Debug\bin
 set REL_DIR=..\Compiler\bin\Release\bin
 set WS_DBG_DIR=..\..\FamiDriver\FamiDriver\bin\x64\Debug\net9.0-windows7.0\bin
 set WS_REL_DIR=..\..\FamiDriver\FamiDriver\bin\x64\Release\net9.0-windows7.0\bin
-set WS_PRJ_DIR=..\..\FamiDriver\bin
+set WS_PRJ_DIR=..\..\FamiDriver\Installer\bin
 
 del buildlog.txt
 del errlog.txt

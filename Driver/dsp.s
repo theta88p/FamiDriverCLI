@@ -103,7 +103,7 @@ YPOS_EXP = $77
 	start:
 	;----------------ch1----------------
 	ch01:
-		lda #0
+		lda #DEV_2A03_SQR1
 		sta DspWork
 		jsr gettrack
 		cmp #1
@@ -225,7 +225,7 @@ YPOS_EXP = $77
 
 	;----------------ch2----------------
 	ch02:
-		lda #1
+		lda #DEV_2A03_SQR2
 		sta DspWork
 		jsr gettrack
 		cmp #1
@@ -342,7 +342,7 @@ YPOS_EXP = $77
 
 	;----------------ch3----------------
 	ch03:
-		lda #2
+		lda #DEV_2A03_TRI
 		sta DspWork
 		jsr gettrack
 		cmp #1
@@ -423,7 +423,7 @@ YPOS_EXP = $77
 
 	;----------------ch4----------------
 	ch04:
-		lda #3
+		lda #DEV_2A03_NOISE
 		sta DspWork
 		jsr gettrack
 		cmp #1
@@ -496,7 +496,7 @@ YPOS_EXP = $77
 	
 	;----------------ch5----------------
 	ch05:
-		lda #4
+		lda #DEV_2A03_DPCM
 		sta DspWork
 		jsr gettrack
 		lda $4015
@@ -537,7 +537,7 @@ YPOS_EXP = $77
 	exp:
 .ifdef VRC6
 	;---------------VRC6 ch1---------------
-		lda #5
+		lda #DEV_VRC6_SQR1
 		sta DspWork
 		jsr gettrack
 		cmp #1
@@ -594,7 +594,7 @@ YPOS_EXP = $77
 		sta ExpVolume
 	;--------------VRC6 ch2--------------
 	vrc6_02:
-		lda #6
+		lda #DEV_VRC6_SQR2
 		sta DspWork
 		jsr gettrack
 		cmp #1
@@ -653,7 +653,7 @@ YPOS_EXP = $77
 		sta ExpVolume
 		;--------------VRC6 saw--------------
 	vrc6_saw:
-		lda #7
+		lda #DEV_VRC6_SAW
 		sta DspWork
 		jsr gettrack
 		cmp #1
@@ -727,6 +727,142 @@ YPOS_EXP = $77
 		lda #0
 		sta ExpVolume
 .endif
+
+.ifdef MMC5
+	;---------------MMC5 ch1---------------
+		lda #DEV_MMC5_SQR1
+		sta DspWork
+		jsr gettrack
+		cmp #1
+		beq @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP1KEY + 0
+		jmp mmc5_02
+	;発音中の場合
+	@keyon:
+		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
+		sta EXP1KEY + 0
+		jsr freq2note
+	;鍵盤の位置計算
+	@pos:
+		lda #0
+		ldy DspWork + 2
+	@L:
+		clc
+		adc #21
+		dey
+		bne @L
+		adc #$30
+		ldy DspWork + 3
+		adc posmap, y
+		sta EXP1KEY + 3			;ハイライト鍵盤の位置
+	;半音計算
+	@note:
+		lda DspWork + 3
+		tay
+		lda halftone, y
+		bne @half
+		lda DspWork + 3
+		cmp #4
+		beq @sqr
+		cmp #11
+		beq @sqr
+		lda #$5d
+		jmp @write
+	@sqr:
+		lda #$5c
+	@write:
+		sta EXP1KEY + 1			;ハイライト鍵盤の形
+		lda #%00000000
+		sta EXP1KEY + 2			;パレット番号
+		jmp @volume
+	@half:
+		lda #$5e
+		sta EXP1KEY + 1			;ハイライト鍵盤の形
+		lda #%00000010
+		sta EXP1KEY + 2			;パレット番号
+	@volume:
+		lda Volume, x
+		sta ExpVolume
+	;--------------MMC5 ch2--------------
+	mmc5_02:
+		lda #DEV_MMC5_SQR2
+		sta DspWork
+		jsr gettrack
+		cmp #1
+		beq @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP2KEY + 0
+		jmp @sum_volume
+	;発音中の場合
+	@keyon:
+		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
+		sta EXP2KEY + 0
+		jsr freq2note
+	;鍵盤の位置計算
+	@pos:
+		lda #0
+		ldy DspWork + 2
+	@L:
+		clc
+		adc #21
+		dey
+		bne @L
+		adc #$30
+		ldy DspWork + 3
+		adc posmap, y
+		sta EXP2KEY + 3			;ハイライト鍵盤の位置
+	;半音計算
+	@note:
+		lda DspWork + 3
+		tay
+		lda halftone, y
+		bne @half
+		lda DspWork + 3
+		cmp #4
+		beq @sqr
+		cmp #11
+		beq @sqr
+		lda #$5d
+		jmp @write
+	@sqr:
+		lda #$5c
+	@write:
+		sta EXP2KEY + 1			;ハイライト鍵盤の形
+		lda #%00000000
+		sta EXP2KEY + 2			;パレット番号
+		jmp @volume
+	@half:
+		lda #$5e
+		sta EXP2KEY + 1			;ハイライト鍵盤の形
+		lda #%00000010
+		sta EXP2KEY + 2			;パレット番号
+	@volume:
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+		;--------------MMC5 Volume--------------
+	@sum_volume:
+		lda ExpVolume
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3		;音量バー隠しのスプライト位置1
+		clc
+		adc #8
+		sta EXPVOL2 + 3		;音量バー隠しのスプライト位置2
+		clc
+		adc #8
+		sta EXPVOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta EXPVOL4 + 3		;音量バー隠しのスプライト位置4
+		lda #0
+		sta ExpVolume
+.endif
+
 
 	end:
 		rts
@@ -1094,6 +1230,7 @@ YPOS_EXP = $77
 		sta $2007
 		lda #$62
 		sta $2007
+
 .ifdef VRC6
 		lda #$63
 		sta $2007
@@ -1113,6 +1250,29 @@ YPOS_EXP = $77
 		sta $2007
 		sta $2007
 .endif
+
+.ifdef MMC5
+		lda #$66
+		sta $2007
+		lda #$67
+		sta $2007
+		lda #$68
+		sta $2007
+		lda #$69
+		sta $2007
+		lda #$21
+		sta $2006
+		lda #$f6
+		sta $2006
+		lda #$28
+		sta $2007
+		lda #$29
+		sta $2007
+		sta $2007
+		sta $2007
+		sta $2007
+.endif
+
 		lda #$22
 		sta $2006
 		lda #$06
@@ -1362,6 +1522,30 @@ YPOS_EXP = $77
 		lda #%00000001
 		sta EXP3KEY + 2
 .endif
+
+.ifdef MMC5
+		lda #$ff
+		sta EXP1KEY + 0
+		sta EXP2KEY + 0
+		lda #YPOS_EXP
+		sta EXPVOL1 + 0
+		sta EXPVOL2 + 0
+		sta EXPVOL3 + 0
+		sta EXPVOL4 + 0
+		lda #$02
+		sta EXPVOL1 + 1
+		sta EXPVOL2 + 1
+		sta EXPVOL3 + 1
+		sta EXPVOL4 + 1
+		lda #$b8
+		sta EXPVOL1 + 3
+		lda #$c0
+		sta EXPVOL2 + 3
+		lda #$c8
+		sta EXPVOL3 + 3
+		lda #$d0
+		sta EXPVOL4 + 3
+.endif
 		
 		;BG書き換えの変数初期化
 		lda #00
@@ -1584,7 +1768,7 @@ YPOS_EXP = $77
 .endproc
 .endif
 
-.rodata
+
 ;ノートナンバーを位置に変換するテーブル
 posmap:
 	.byte	$00, $01, $03, $04, $06, $09, $0A, $0C, $0D, $0F, $10, $12

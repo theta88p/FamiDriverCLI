@@ -12,6 +12,7 @@
 ; Place the startup code in a special segment.
 
 .segment	"STARTUP"
+.byte		"DRFM"
 
 start:
 

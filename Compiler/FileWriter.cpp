@@ -80,7 +80,8 @@ void FileWriter::createNes()
     }
     else if (extdevice & ExtDev::MMC5)
     {
-        //drv += L"bin\\drv_mmc5.bin";
+        drv += L"bin\\dsp_mmc5_code.bin";
+        data += L"bin\\dsp_mmc5_data.bin";
     }
     else if (extdevice & ExtDev::N163)
     {
@@ -117,16 +118,20 @@ void FileWriter::createNes()
     char c;
     int nesheadsize = 0x10;
     int dpcmaddr = 0x4000 + nesheadsize;
-    int dpcmend = 0x7ffa + nesheadsize;
+    int dpcmend = 0x7eb0 + nesheadsize;
 
     if (extdevice & ExtDev::VRC6)
     {
         neshead[0x04] = 0x02; //PRG16K x2
         neshead[0x06] = 0x81; //VRC6
 		neshead[0x07] = 0x10; //VRC6
-        
-        dpcmend = 0x7d00 + nesheadsize;
 	}
+    else if (extdevice & ExtDev::MMC5)
+    {
+        neshead[0x04] = 0x02; //PRG16K x2
+        neshead[0x06] = 0x51; //MMC5
+		neshead[0x07] = 0x0;  //MMC5
+    }
 
 
     if (nesheadsize + drvsize + seqdata.size() > dpcmaddr + dpcmoffset)
@@ -291,9 +296,9 @@ void FileWriter::createNsf()
     nsfhead[0x06] = musicnum;//曲数
     nsfhead[0x08] = 0x00;   //シーケンスデータの開始アドレス
     nsfhead[0x09] = 0x80;
-    nsfhead[0x0a] = 0x2f;   //初期化アドレス
+    nsfhead[0x0a] = 0x2d;   //初期化アドレス
     nsfhead[0x0b] = 0x80;
-    nsfhead[0x0c] = 0x3e;   //再生アドレス
+    nsfhead[0x0c] = 0x3c;   //再生アドレス
     nsfhead[0x0d] = 0x80;
     nsfhead[0x7b] = extdevice;   //拡張音源
 

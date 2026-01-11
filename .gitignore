@@ -349,3 +349,4 @@ errlog.txt
 *.o
 *.lst
 *.nes
+/Driver/a.out
