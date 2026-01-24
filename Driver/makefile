@@ -42,7 +42,7 @@ ARFLAGS = a
 #;  Linker
 LINKER  = $(TOOL_PASS)ld65
 LD_NSF_FLAGS = -C $(CFG_NSF_FILE) -L$(LIB_PASS) -v -m $(MAP_NSF_FILE) -vm --dbgfile $(DBG_NSF_FILE) -o
-LD_DSP_FLAGS = -C $(CFG_DSP_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE) -o
+LD_DSP_FLAGS = -C $(CFG_DSP_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 LD_DSP_VRC6_FLAGS = -C $(CFG_DSP_VRC6_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 LD_DSP_MMC5_FLAGS = -C $(CFG_DSP_MMC5_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 
@@ -116,8 +116,10 @@ LIB_FILES =
 #---------------
 #; リンカーの設定
 ifdef DEBUG
+
 CFG_NSF_FILE   =	nsfd.cfg
 CFG_DSP_FILE   =	nesd.cfg
+CFG_STAT_FILE   =	nesd.cfg
 
 else
 
@@ -125,6 +127,7 @@ CFG_NSF_FILE   =	nsf.cfg
 CFG_DSP_FILE   =	nes.cfg
 CFG_DSP_VRC6_FILE   =	nes_vrc6.cfg
 CFG_DSP_MMC5_FILE   =	nes_mmc5.cfg
+
 endif
 
 MAP_NSF_FILE   =	nsf.map
@@ -133,6 +136,9 @@ DBG_NSF_FILE   =	nsf.dbg
 MAP_DSP_FILE   =	dsp.map
 DBG_DSP_FILE   =	dsp.dbg
 
+MAP_STAT_FILE   =	stat.map
+DBG_STAT_FILE   =	stat.dbg
+
 #---------------
 #; ソースファイル
 ifdef DEBUG
@@ -140,7 +146,7 @@ ifdef DEBUG
 MAIN_NSF_FILES =	main_nsf.o		\
 					nsf.o			\
 					crt0_nsf.o		\
-					data_nsf_dbg.o	\
+					data_nsfd.o		\
 					drv_fds.o		\
 
 MAIN_DSP_FILES =	ines_mmc5.o		\
@@ -149,7 +155,7 @@ MAIN_DSP_FILES =	ines_mmc5.o		\
 					irq_main.o		\
 					main_nes.o		\
 					drv_mmc5.o		\
-					data_dbg.o		\
+					data_nesd.o		\
 					dsp_mmc5.o		\
 
 else
@@ -200,7 +206,7 @@ all : dsp.nes
 
 dsp.nes : $(MAIN_DSP_FILES) $(CHR_FILES) 
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
-	$(LINKER) $(LD_DSP_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_FLAGS) -o $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 #dbg.nsf : $(MAIN_NSF_FILES)
 #	@echo [Link] : $@ >>$(ERRLOG_FILE)
