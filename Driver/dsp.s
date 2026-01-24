@@ -874,13 +874,15 @@ YPOS_EXP = $77
 .proc gettrack
 		ldx #LAST_TRACK
 		stx DspWork + 1
+		lda #0
+		sta DspWork + 2
 	@loop:
 		lda Device, x
 		cmp DspWork
 		beq @exec
-		bcc false			;目的の番号より小さくなったら打ち切る
+		bcc end			;目的の番号より小さくなったら打ち切る
 		dex
-		bmi false
+		bmi end
 		stx DspWork + 1
 		jmp @loop
 	@exec:
@@ -889,17 +891,16 @@ YPOS_EXP = $77
 		bne @next
 		lda Volume, x
 		beq @next
-		jmp true
+		lda #1
+		sta DspWork + 2
+		stx DspWork + 1
 	@next:
 		dex
-		bmi false
+		bmi end
 		jmp @loop
-	true:
-		lda #1
-		rts
-	false:
+	end:
 		ldx DspWork + 1
-		lda #0
+		lda DspWork + 2
 		rts
 .endproc
 
