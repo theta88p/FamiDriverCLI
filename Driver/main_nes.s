@@ -2,7 +2,8 @@
 .export		_init
 .export		_play
 
-.importzp	sync
+.importzp	CpuCtrL
+.importzp	CpuCtrH
 .import		drv_init
 .import		drv_sndreq
 .import		drv_main
@@ -33,6 +34,9 @@ bgm_00:		.addr	BGM0
 		jsr _init
 
 	Loop:
+		inc CpuCtrL
+		bne Loop
+		inc CpuCtrH
 		jmp	Loop
 .endproc
 

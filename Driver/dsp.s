@@ -1,4 +1,4 @@
-;FamiDriverCLI FCDSP v0.3.6
+;FamiDriverCLI FCDSP v0.3.7
 
 .importzp	Frags
 .import		IsProc
@@ -11,10 +11,14 @@
 .import		PrevFreq_L
 .import		PrevFreq_H
 .import		palette
+.import		DrvFrags
 
+.exportzp	CpuCtrL
+.exportzp	CpuCtrH
 .export 	dsp_init
 .export 	dsp_main
 .export 	dsp_write
+.export		drop_inc
 .export		__c
 .export		__cc
 .export		__s
@@ -28,15 +32,17 @@
 .zeropage
 
 DspWork:	.res	4
+CpuCtrL:	.res	1
+CpuCtrH:	.res	1
 
 .bss
 
-__c:		.byte	$30
-__cc:		.byte	$30
-__s:		.byte	$30
-__ss:		.byte	$30
-__m:		.byte	$30
-__mm:		.byte	$30
+__c:		.res	1
+__cc:		.res	1
+__s:		.res	1
+__ss:		.res	1
+__m:		.res	1
+__mm:		.res	1
 
 POctHead:		.res	3
 POctave:		.res	3
@@ -51,6 +57,15 @@ ExpVolume:		.res	1
 PANote:			.res	2
 PAVolume:		.res	4
 
+DropCtr:		.res	1
+Drop1:			.res	1
+Drop2:			.res	1
+CpuL1:			.res	1
+CpuL2:			.res	1
+CpuH1:			.res	1
+CpuH2:			.res	1
+CpuBar:			.res	1
+
 DMA = $0700
 
 CH1 = 0
@@ -59,6 +74,7 @@ CH3 = CH2 + 20
 CH4 = CH3 + 4
 CH5 = CH4 + 20
 EXP1 = CH5 + 4
+CPU = EXP1 + 28
 
 CH1KEY		=	DMA + 0
 CH1VOL1		=	DMA + 4
@@ -90,12 +106,15 @@ EXPVOL2 = DMA + EXP1 + 16
 EXPVOL3 = DMA + EXP1 + 20
 EXPVOL4 = DMA + EXP1 + 24
 
-YPOS1 = $2f
-YPOS2 = $47
-YPOS3 = $5f
-YPOS4 = $8f
-YPOS5 = $a7
-YPOS_EXP = $77
+CPUREM = DMA + CPU
+
+YPOS1 = $27
+YPOS2 = $3f
+YPOS3 = $57
+YPOS4 = $87
+YPOS5 = $9f
+YPOS_EXP = $6f
+YPOS_CPU = $bf
 
 .code
 
@@ -156,7 +175,7 @@ YPOS_EXP = $77
 		sta POctave + 0				;オクターブ番号
 		lda charmap, y
 		sta PNote + 0				;音名
-		lda #$44
+		lda #$42
 		sta POctHead + 0
 	@note:
 		lda DspWork + 3
@@ -180,7 +199,7 @@ YPOS_EXP = $77
 		sta CH1KEY + 2			;パレット番号
 		jmp @volume
 	@half:
-		lda #$3b
+		lda #$45
 		sta PSharp + 0				;シャープ記号
 		lda #$5e
 		sta CH1KEY + 1			;ハイライト鍵盤の形
@@ -273,7 +292,7 @@ YPOS_EXP = $77
 		sta POctave + 1				;オクターブ番号
 		lda charmap, y
 		sta PNote + 1				;音名
-		lda #$44
+		lda #$42
 		sta POctHead + 1
 	@note:
 		lda DspWork + 3
@@ -297,7 +316,7 @@ YPOS_EXP = $77
 		sta CH2KEY + 2			;パレット番号
 		jmp @volume
 	@half:
-		lda #$3b
+		lda #$45
 		sta PSharp + 1				;シャープ記号
 		lda #$5e
 		sta CH2KEY + 1			;ハイライト鍵盤の形
@@ -386,7 +405,7 @@ YPOS_EXP = $77
 		sta POctave + 2			;オクターブ番号
 		lda charmap, y
 		sta PNote + 2			;音名
-		lda #$44
+		lda #$42
 		sta POctHead + 2
 	@note:
 		lda DspWork + 3
@@ -410,7 +429,7 @@ YPOS_EXP = $77
 		sta CH3KEY + 2			;パレット番号
 		jmp @volume
 	@half:
-		lda #$3b
+		lda #$45
 		sta PSharp + 2				;シャープ記号
 		lda #$5e
 		sta CH3KEY + 1			;ハイライト鍵盤の形
@@ -487,11 +506,11 @@ YPOS_EXP = $77
 		lda Tone, x
 		and #$0f
 		bne @p
-		lda #$43
+		lda #$41
 		sta PTone4
 		jmp ch05
 	@p:
-		lda #$45
+		lda #$43
 		sta PTone4
 	
 	;----------------ch5----------------
@@ -507,7 +526,7 @@ YPOS_EXP = $77
 		dec PVolume + 1
 	:	lda #$ff
 		sta CH5KEY + 0
-		jmp exp
+		jmp cpu
 	;発音中の場合
 	@keyon:
 		lda #YPOS5 + 8
@@ -533,6 +552,80 @@ YPOS_EXP = $77
 	@volume:
 		lda #4
 		sta PVolume + 1
+
+	cpu:
+		;ドロップカウンタ表示
+		lda DropCtr
+		lsr
+		lsr
+		lsr
+		lsr
+		clc
+		adc #$30
+		sta Drop1
+		lda #%00001111
+		and DropCtr
+		clc
+		adc #$30
+		sta Drop2
+		;残りCPU時間
+		;上位バイト
+		lda CpuCtrH
+		lsr
+		lsr
+		lsr
+		lsr
+		clc
+		adc #$30
+		sta CpuH2
+		lda #%00001111
+		and CpuCtrH
+		clc
+		adc #$30
+		sta CpuH1
+		;下位バイト
+		lda CpuCtrL
+		lsr
+		lsr
+		lsr
+		lsr
+		clc
+		adc #$30
+		sta CpuL2
+		lda #%00001111
+		and CpuCtrL
+		clc
+		adc #$30
+		sta CpuL1
+		;下位バイトバー位置
+		lda CpuCtrH
+		sta CpuBar	;ここで保存しないとズレる
+		asl
+		asl
+		asl
+		sta DspWork
+		lda CpuCtrL
+		lsr
+		lsr
+		lsr
+		lsr
+		lsr
+		sta DspWork + 1
+		lda #8
+		sec
+		sbc DspWork + 1
+		clc
+		adc DspWork
+		clc
+		adc #88
+		sta CPUREM + 3
+		lda #YPOS_CPU
+		sta CPUREM + 0
+		;カウンタ初期化
+		lda #0
+		sta CpuCtrL
+		lda #0
+		sta CpuCtrH
 
 	exp:
 .ifdef VRC6
@@ -915,13 +1008,13 @@ YPOS_EXP = $77
 		sta $2007
 		lda __m
 		sta $2007
-		lda #$3a
+		lda #$44
 		sta $2007
 		lda __ss
 		sta $2007
 		lda __s
 		sta $2007
-		lda #$3a
+		lda #$44
 		sta $2007
 		lda __cc
 		sta $2007
@@ -1025,13 +1118,57 @@ YPOS_EXP = $77
 		sta $2006
 		lda #$29
 		ldx PVolume + 1
-		beq @end
+		beq cpu
 	:	sta $2007
 		dex
 		bne :-
-	@end:
+	cpu:
+		;ドロップカウンタ表示
+		lda #$23
+		sta $2006
+		lda #$07
+		sta $2006
+		lda Drop2
+		sta $2007
+		lda Drop1
+		sta $2007
+		;残りCPU時間
+		lda #$23
+		sta $2006
+		lda #$26
+		sta $2006
+		lda CpuH2
+		sta $2007
+		lda CpuH1
+		sta $2007
+		lda CpuL2
+		sta $2007
+		lda CpuL1
+		sta $2007
+		;残りCPUバー
+		lda #$23
+		sta $2006
+		lda #$2b
+		sta $2006
+		lda #$10
+		sec
+		sbc CpuBar
+		sta DspWork
+		ldx CpuBar
+		inx
+	:	lda #$29
+		sta $2007
+		dex
+		bne :-
+		ldx DspWork
+	:	lda #$02
+		sta $2007
+		dex
+		bne :-
+	end:
 		rts
 .endproc
+
 
 .proc dsp_init
 		lda #$30
@@ -1052,30 +1189,6 @@ YPOS_EXP = $77
 		sta $2000
 		lda #$06
 		sta $2001
-		;転送先OAMアドレスに0を設定
-		lda #$00
-		sta $2003
-		;スプライトDMAの初期化
-		lda #$00
-		ldx #$00
-	init:
-		sta DMA, x
-		dex
-		bne init
-		;スプライト非表示
-		lda #$ff
-		ldx #$ff
-	inv:
-		sta DMA, x
-		dex
-		dex
-		dex
-		dex
-		cpx #15
-		bcs inv
-		;スプライト転送
-		lda #$07
-		sta $4014
 		;BG描画
 		lda #$20
 		sta $2006
@@ -1093,14 +1206,15 @@ YPOS_EXP = $77
 		dex
 		bne border1
 		lda #$02
-		ldx #$60
-		ldy #$03
-	blue:
+		ldy #$16
+	blue1:
+		ldx #$20
+	blue2:
 		sta $2007
 		dex
-		bne blue
+		bne blue2
 		dey
-		bne blue
+		bne blue1
 		lda #$03
 		ldx #$20
 	border2:
@@ -1108,7 +1222,7 @@ YPOS_EXP = $77
 		dex
 		bne border2
 		lda #$00
-		ldx #$a0
+		ldx #$80
 	black2:
 		sta $2007
 		dex
@@ -1354,6 +1468,13 @@ YPOS_EXP = $77
 		sta $2007
 		dex
 		bne @L6
+		;cpu
+		lda #$23
+		sta $2006
+		lda #$06
+		sta $2006
+		lda #$3d
+		sta $2007
 
 		;パレット設定
 		lda #$3f
@@ -1496,6 +1617,12 @@ YPOS_EXP = $77
 		;ch5
 		lda #$5f
 		sta CH5KEY + 1
+		
+		;cpu
+		lda #$02
+		sta CPUREM + 1
+		lda #$00
+		sta CPUREM + 2
 
 .ifdef VRC6
 		lda #$ff
@@ -1577,6 +1704,9 @@ YPOS_EXP = $77
 		sta PSharp + 1
 		sta PSharp + 2
 		
+		lda #$00
+		sta DropCtr
+		
 		;スプライト転送
 		lda #$07
 		sta $4014
@@ -1591,6 +1721,22 @@ YPOS_EXP = $77
 		lda #$1e
 		sta $2001
 	rts
+.endproc
+
+
+.proc drop_inc
+		;ドロップカウンタ10進計算
+		inc DropCtr
+		lda DropCtr
+		and #%00001111
+		cmp #$0a
+		bcc :+
+		lda DropCtr
+		and #%11110000
+		clc
+		adc #$10
+		sta DropCtr
+	:	rts
 .endproc
 
 .proc pulse
@@ -1776,7 +1922,7 @@ posmap:
 
 ;ノートナンバーを文字に変換するテーブル
 charmap:
-	.byte	$3E, $3E, $3F, $3F, $40, $41, $41, $42, $42, $3C, $3C, $3D
+	.byte	$3c, $3c, $3d, $3d, $3e, $3f, $3f, $40, $40, $3a, $3a, $3b
 
 ;半音判別用のテーブル
 halftone:
