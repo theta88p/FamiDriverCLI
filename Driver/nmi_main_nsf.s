@@ -19,11 +19,12 @@
 ; Call sound driver main routine
 ;---------------------------------------
 
-	jsr	drv_main
+;	jsr	drv_main
 
 ;---------------------------------------
 ;register pop
 ;---------------------------------------
+exit:
 	pla
 	tax
 	pla

@@ -45,8 +45,10 @@ bgm_00:		.addr	_BGM0
 	lda	bgm_00
 	ldx	bgm_00 + 1
 	jsr	drv_sndreq
+	rts
 .endproc
 
 .proc	_play
 	jmp	drv_main
+	rts
 .endproc
