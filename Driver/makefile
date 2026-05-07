@@ -66,6 +66,8 @@ CP      = copy
 	$(AS) drv.s $(ASFLAGS) -D SS5B=1 -o drv_ss5b.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
 	$(AS) drv.s $(ASFLAGS) -D FDS=1 -o drv_fds.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -D VRC6=1 -D SS5B=1 -D FDS=1 -o drv_all.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 	@echo [Assemble] : crt0_nes.s >>$(ERRLOG_FILE)
 	$(AS) crt0_nes.s $(ASFLAGS) -D VRC6=1 -o crt0_nes_vrc6.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
@@ -135,9 +137,6 @@ DBG_NSF_FILE   =	nsf.dbg
 
 MAP_DSP_FILE   =	dsp.map
 DBG_DSP_FILE   =	dsp.dbg
-
-MAP_STAT_FILE   =	stat.map
-DBG_STAT_FILE   =	stat.dbg
 
 #---------------
 #; ソースファイル
@@ -214,7 +213,7 @@ dsp.nes : $(MAIN_DSP_FILES) $(CHR_FILES)
 
 else
 
-all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_ss5b.bin drv_fds.bin dsp dsp_vrc6 dsp_mmc5
+all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_ss5b.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_mmc5
 
 drv.bin : drv.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
@@ -233,6 +232,10 @@ drv_ss5b.bin : drv_ss5b.o $(MAIN_NSF_FILES)
 	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 drv_fds.bin : drv_fds.o $(MAIN_NSF_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_all.bin : drv_all.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
