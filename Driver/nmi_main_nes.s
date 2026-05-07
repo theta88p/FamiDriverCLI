@@ -1,12 +1,8 @@
 
 .export		NMI_main
 
-.importzp	sync
-.import		DrvFrags
-.import		drv_main
-.import		dsp_main
+.importzp	MainExecFrag
 .import		dsp_write
-.import		drop_inc
 .import		__c
 .import		__cc
 .import		__s
@@ -32,17 +28,8 @@
 ;---------------------------------------
 ; Call sound driver main routine
 ;---------------------------------------
-
-	lda DrvFrags
-	and #DRV_INIT
-	beq exit
-	lda DrvFrags
-	and #DRV_IS_FREE
-	bne :+
-	jsr drop_inc
-	jmp exit
 	
-:	jsr dsp_write
+	jsr dsp_write
 	;スクロール位置
 	lda	#0
 	sta	$2005
@@ -52,9 +39,9 @@
 	lda #$07
 	sta $4014
 	
-	jsr drv_main
-	jsr dsp_main
-	
+	lda #1
+	sta MainExecFrag
+
 ;---------------------------------------
 ; Count-up
 ;---------------------------------------
