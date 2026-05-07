@@ -973,9 +973,9 @@ YPOS_CPU = $bf
 		lda Device, x
 		cmp DspWork
 		beq @exec
-		bcc end			;目的の番号より小さくなったら打ち切る
+		bcc @end			;目的の番号より小さくなったら打ち切る
 		dex
-		bmi end
+		bmi @end
 		stx DspWork + 1
 		jmp @loop
 	@exec:
@@ -989,9 +989,9 @@ YPOS_CPU = $bf
 		stx DspWork + 1
 	@next:
 		dex
-		bmi end
+		bmi @end
 		jmp @loop
-	end:
+	@end:
 		ldx DspWork + 1
 		lda DspWork + 2
 		rts
@@ -1180,15 +1180,35 @@ YPOS_CPU = $bf
 		sta __mm
 		lda #$02
 		ldx #2
-	@L:
-		sta POctave, x
+	:	sta POctave, x
 		dex
-		bpl @L
+		bpl :-
 		;描画停止
 		lda #$80
 		sta $2000
 		lda #$06
 		sta $2001
+		;転送先OAMアドレスに0を設定
+		lda #$00
+		sta $2003
+		;スプライトDMAの初期化
+		lda #$00
+		ldx #$00
+	init:
+		sta DMA, x
+		dex
+		bne init
+		;スプライト非表示
+		lda #$ff
+		ldx #$ff
+	inv:
+		sta DMA, x
+		dex
+		dex
+		dex
+		dex
+		cpx #15
+		bcs inv
 		;BG描画
 		lda #$20
 		sta $2006
@@ -1262,11 +1282,10 @@ YPOS_CPU = $bf
 		lda #$c6
 		sta $2006
 		ldx #$0b
-	@L1:
-		stx $2007
+	:	stx $2007
 		inx
 		cpx #$0e
-		bcc @L1
+		bcc :-
 		jsr pulse
 		lda #$20
 		sta $2006
@@ -1501,10 +1520,9 @@ YPOS_CPU = $bf
 		bne attr
 		lda #$55
 		ldx #$18
-	@L1:
-		sta $2007
+	:	sta $2007
 		dex
-		bne @L1
+		bne :-
 		lda #$55
 		sta $2007
 		sta $2007
@@ -1531,10 +1549,9 @@ YPOS_CPU = $bf
 		
 		lda #$aa
 		ldx #$08
-	@L3:
-		sta $2007
+	:	sta $2007
 		dex
-		bne @L3
+		bne :-
 		;スプライト
 	sprite:
 		;非表示にするもの
@@ -1743,17 +1760,15 @@ YPOS_CPU = $bf
 		lda #$02
 		sta $2007
 		ldx #$16
-	@L:
-		stx $2007
+	:	stx $2007
 		inx
 		cpx #$1a
-		bcc @L
+		bcc :-
 		ldx #$08
 		lda #$02
-	@L2:
-		sta $2007
+	:	sta $2007
 		dex
-		bne @L2
+		bne :-
 		lda #$28
 		sta $2007
 		lda #$29
@@ -1766,24 +1781,22 @@ YPOS_CPU = $bf
 
 .proc key
 		ldx #$46
-	@L:
-		stx $2007
+	:	stx $2007
 		inx
 		cpx #$5b
-		bcc @L
+		bcc :-
 		rts
 .endproc
 
 ;a % DspWork
 .proc rem
 		ldx #0
-	@L:
-		cmp DspWork
+	:	cmp DspWork
 		bcc end
 		sec
 		sbc DspWork
 		inx
-		jmp @L
+		jmp :-
 	end:
 		rts
 .endproc
