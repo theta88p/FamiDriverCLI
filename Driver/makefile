@@ -121,7 +121,6 @@ ifdef DEBUG
 
 CFG_NSF_FILE   =	nsfd.cfg
 CFG_DSP_FILE   =	nesd.cfg
-CFG_STAT_FILE   =	nesd.cfg
 
 else
 
@@ -201,15 +200,15 @@ endif
 
 ifdef DEBUG
 
-all : dsp.nes
+all : dsp.nes nsf.nsf
 
 dsp.nes : $(MAIN_DSP_FILES) $(CHR_FILES) 
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_DSP_FLAGS) -o $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
-#dbg.nsf : $(MAIN_NSF_FILES)
-#	@echo [Link] : $@ >>$(ERRLOG_FILE)
-#	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+nsf.nsf : $(MAIN_NSF_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 else
 
