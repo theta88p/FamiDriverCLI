@@ -2428,9 +2428,9 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ;FDS
 .ifdef FDS
 .proc write_fds
-		lda FdsPrevWav
-		cmp Tone, x
+		lda Tone, x
 		and #$0f
+		cmp FdsPrevWav
 		beq mod				;前回書き込んだ音色と同じならスキップ
 		lda #%10000000
 		sta $4089			;Wavetable書き込み許可
@@ -2483,6 +2483,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta $4087			;Mod有効
 	vol:
 		lda Tone, x			;音色番号を保存
+		and #$0f
 		sta FdsPrevWav
 		lda FdsModTone
 		sta FdsPrevMod
