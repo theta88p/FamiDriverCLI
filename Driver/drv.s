@@ -1079,8 +1079,16 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 	@N1:
 		lda #1
 		sta SSwpCtr, x		;カウンタリセット
+		lda Device, x
+		cmp #DEV_FDS
+		beq @fds
 		lda SSwpEndHT, x
 		bmi @neg			;変化方向がプラスならDepthをマイナスにする。マイナスなら何もしない
+		jmp @invert
+	@fds:
+		lda SSwpEndHT, x	;FDSは周波数値と音程の増減方向が同じ
+		bpl @neg
+	@invert:
 		lda SSwpDepth, x
 		eor #$ff
 		clc
@@ -2470,11 +2478,11 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		and #$0f
 		cmp FdsPrevWav
 		beq mod				;前回書き込んだ音色と同じならスキップ
+		tay
 		lda #%10000000
 		sta $4089			;Wavetable書き込み許可
 		lda #64
 		sta Work + 2
-		ldy Tone, x
 		lda FdsWavAddr_H	;波形アドレス計算
 		sta Work + 1
 		lda FdsWavAddr_L
