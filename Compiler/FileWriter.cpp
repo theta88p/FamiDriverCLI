@@ -202,6 +202,7 @@ void FileWriter::createFds()
 
     struct FdsFile
     {
+        unsigned char number;
         unsigned char id;
         const char* name;
         int address;
@@ -209,9 +210,30 @@ void FileWriter::createFds()
         std::vector<unsigned char> data;
     };
 
+    std::vector<unsigned char> hackdata(0xe0, 0);
+    const unsigned char nmihack[]{
+        0x48, 0xa9, 0x00, 0x8d, 0x00, 0x20, 0xa9, 0x0f,
+        0x8d, 0xfe, 0x01, 0xa9, 0x01, 0x8d, 0xff, 0x01,
+        0xa9, 0x6c, 0x8d, 0x10, 0x01, 0xa9, 0xfc, 0x8d,
+        0x11, 0x01, 0xa9, 0xdf, 0x8d, 0x12, 0x01, 0xa9,
+        0xef, 0x8d, 0xfa, 0xdf, 0xa9, 0x35, 0x8d, 0x02,
+        0x01, 0xa9, 0xac, 0x8d, 0x04, 0x01, 0x68, 0x40
+    };
+    std::copy(std::begin(nmihack), std::end(nmihack), hackdata.begin() + 0xa0);
+    hackdata[0xda] = 0xc0;
+    hackdata[0xdb] = 0xdf;
+
+    std::vector<unsigned char> gotonmi(0x100, 0);
+    for (int i = 8; i <= 0xf0; i += 8)
+    {
+        gotonmi[i] = 0x90;
+    }
+
     std::vector<FdsFile> files;
-    files.push_back({ 1, "FCDSPPRG", prgaddr, 0, prgdata });
-    files.push_back({ 2, "FCDSPCHR", chraddr, 1, chrdata });
+    files.push_back({ 0, 0, "HACK-PRG", 0xdf20, 0, hackdata });
+    files.push_back({ 1, 0, "GOTO-NMI", 0x2000, 0, gotonmi });
+    files.push_back({ 2, 0, "FCDSPPRG", prgaddr, 0, prgdata });
+    files.push_back({ 3, 0, "FCDSPCHR", chraddr, 1, chrdata });
     const unsigned char lastFileId = files.back().id;
     const unsigned char visibleFileCount = files.size();
 
@@ -274,35 +296,12 @@ void FileWriter::createFds()
     pushByte(0x00);
 
     pushByte(0x02);
-	pushByte(visibleFileCount + 1); // ファイル数 + 1（許諾ファイル分）
-
-	pushByte(0x03); // 許諾ファイル
-    pushByte(0x00);
-    pushByte(0x00);
-    pushByte(0x4b);
-    pushByte(0x59);
-    pushByte(0x4f);
-    pushByte(0x44);
-    pushByte(0x41);
-    pushByte(0x4b);
-    pushByte(0x55);
-    pushByte(0x2d);
-    pushByte(0x00);
-    pushByte(0x28);
-    pushByte(0xe0);
-    pushByte(0x00);
-    pushByte(0x02);
-    pushByte(0x04);
-
-	for (int i = 0; i < 0xe0; i++)
-	{
-		pushByte(kyodaku[i]);
-	}
+	pushByte(visibleFileCount);
 
     for (const auto& file : files)
     {
         pushByte(0x03);
-        pushByte(file.id);
+        pushByte(file.number);
         pushByte(file.id);
         pushString(file.name, 8);
         pushWord(file.address);
