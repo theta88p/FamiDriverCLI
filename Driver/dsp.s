@@ -1110,7 +1110,7 @@ note_palette:
 		dex
 		bpl :-
 		;描画停止
-		lda #$80
+		lda #$00
 		sta $2000
 		lda #$06
 		sta $2001
@@ -1753,8 +1753,8 @@ note_palette:
 		sta $2005
 		lda #$00
 		sta $2005
-		;描画開始
-		lda #$80
+		;描画開始（NMIは再生初期化完了後に有効化）
+		lda #$00
 		sta $2000
 		lda #$1e
 		sta $2001
