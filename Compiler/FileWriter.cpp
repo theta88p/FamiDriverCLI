@@ -592,9 +592,9 @@ void FileWriter::createNsf()
     nsfhead[0x06] = musicnum;//曲数
     nsfhead[0x08] = 0x00;   //シーケンスデータの開始アドレス
     nsfhead[0x09] = 0x80;
-    nsfhead[0x0a] = 0x2d;   //初期化アドレス
+    nsfhead[0x0a] = 0x37;   //初期化アドレス
     nsfhead[0x0b] = 0x80;
-    nsfhead[0x0c] = 0x3d;   //再生アドレス
+    nsfhead[0x0c] = 0x47;   //再生アドレス
     nsfhead[0x0d] = 0x80;
     nsfhead[0x7b] = expdevice;   //拡張音源
 
