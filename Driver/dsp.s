@@ -1,17 +1,15 @@
 ;FamiDriverCLI FCDSP v0.3.8
 
 .importzp	Frags
-.import		IsProc
+.import		DrvFrags
 .import		Device
 .import		NoteN
 .import		Volume
 .import		Tone
 .import		Freq_L
 .import		Freq_H
-.import		PrevFreq_L
-.import		PrevFreq_H
+.import		ActTbl
 .import		palette
-.import		DrvFrags
 
 .exportzp	CpuCtrL
 .exportzp	CpuCtrH
@@ -32,6 +30,7 @@
 .zeropage
 
 DspWork:	.res	4
+DspChannel:	.res	1
 CpuCtrL:	.res	1
 CpuCtrH:	.res	1
 
@@ -48,6 +47,12 @@ POctHead:		.res	3
 POctave:		.res	3
 PNote:			.res	3
 PSharp:			.res	3
+.ifdef FDS
+PExpOctHead:	.res	1
+PExpOctave:	.res	1
+PExpNote:		.res	1
+PExpSharp:		.res	1
+.endif
 PToneL:			.res	3
 PToneR:			.res	3
 PTone4:			.res	1
@@ -122,11 +127,13 @@ YPOS_CPU = $bf
 	start:
 	;----------------ch1----------------
 	ch01:
-		lda #DEV_2A03_SQR1
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
+		ldx #DEV_2A03_SQR1
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
 	@keyoff:
 		lda #$ff
 		sta CH1KEY + 0
@@ -151,60 +158,9 @@ YPOS_CPU = $bf
 		jmp ch02
 	;発音中の場合
 	@keyon:
-		lda #YPOS1 + 8			;ハイライト鍵盤を表示
-		sta CH1KEY + 0
 		jsr freq2note
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta CH1KEY + 3			;ハイライト鍵盤の位置
-	;ノートナンバー表示
-	;@notenum:
-		lda DspWork + 2
-		clc
-		adc #$30
-		sta POctave + 0				;オクターブ番号
-		lda charmap, y
-		sta PNote + 0				;音名
-		lda #$42
-		sta POctHead + 0
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda #$02
-		sta PSharp + 0				;シャープ記号
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta CH1KEY + 1			;ハイライト鍵盤の形
-		lda #%00000000
-		sta CH1KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$45
-		sta PSharp + 0				;シャープ記号
-		lda #$5e
-		sta CH1KEY + 1			;ハイライト鍵盤の形
-		lda #%00000010
-		sta CH1KEY + 2			;パレット番号
+		ldy #0
+		jsr draw_note
 	;音量バー
 	@volume:
 		lda Volume, x
@@ -244,11 +200,13 @@ YPOS_CPU = $bf
 
 	;----------------ch2----------------
 	ch02:
-		lda #DEV_2A03_SQR2
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
+		ldx #DEV_2A03_SQR2
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
 	@keyoff:
 		lda #$ff
 		sta CH2KEY + 0
@@ -268,60 +226,9 @@ YPOS_CPU = $bf
 		jmp ch03
 	;発音中の場合
 	@keyon:
-		lda #YPOS2 + 8			;ハイライト鍵盤を表示
-		sta CH2KEY + 0
 		jsr freq2note
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta CH2KEY + 3			;ハイライト鍵盤の位置
-	;ノートナンバー表示
-	;@notenum:
-		lda DspWork + 2
-		clc
-		adc #$30
-		sta POctave + 1				;オクターブ番号
-		lda charmap, y
-		sta PNote + 1				;音名
-		lda #$42
-		sta POctHead + 1
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda #$02
-		sta PSharp + 1			;シャープ記号
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta CH2KEY + 1			;ハイライト鍵盤の形
-		lda #%00000000
-		sta CH2KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$45
-		sta PSharp + 1				;シャープ記号
-		lda #$5e
-		sta CH2KEY + 1			;ハイライト鍵盤の形
-		lda #%00000010
-		sta CH2KEY + 2			;パレット番号
+		ldy #1
+		jsr draw_note
 	;音量バー
 	@volume:
 		lda Volume, x
@@ -361,11 +268,13 @@ YPOS_CPU = $bf
 
 	;----------------ch3----------------
 	ch03:
-		lda #DEV_2A03_TRI
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
+		ldx #DEV_2A03_TRI
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
 	@keyoff:
 		lda #$ff
 		sta CH3KEY + 0
@@ -380,61 +289,9 @@ YPOS_CPU = $bf
 		jmp ch04
 	;発音中の場合
 	@keyon:
-		lda #YPOS3 + 8			;ハイライト鍵盤を表示
-		sta CH3KEY + 0
 		jsr freq2note
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-		dey						;三角波は1オクターブ低く表示
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta CH3KEY + 3			;ハイライト鍵盤の位置
-	;ノートナンバー表示
-	;@notenum:
-		lda DspWork + 2
-		clc
-		adc #$2f				;三角波は1オクターブ低く表示
-		sta POctave + 2			;オクターブ番号
-		lda charmap, y
-		sta PNote + 2			;音名
-		lda #$42
-		sta POctHead + 2
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda #$02
-		sta PSharp + 2			;シャープ記号
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta CH3KEY + 1			;ハイライト鍵盤の形
-		lda #%00000000
-		sta CH3KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$45
-		sta PSharp + 2				;シャープ記号
-		lda #$5e
-		sta CH3KEY + 1			;ハイライト鍵盤の形
-		lda #%00000010
-		sta CH3KEY + 2			;パレット番号
+		ldy #2
+		jsr draw_note
 	;音量バー
 	@volume:
 		lda #4
@@ -442,11 +299,13 @@ YPOS_CPU = $bf
 
 	;----------------ch4----------------
 	ch04:
-		lda #DEV_2A03_NOISE
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
+		ldx #DEV_2A03_NOISE
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
 	@keyoff:
 		lda #$ff
 		sta CH4KEY + 0
@@ -515,9 +374,9 @@ YPOS_CPU = $bf
 	
 	;----------------ch5----------------
 	ch05:
-		lda #DEV_2A03_DPCM
-		sta DspWork
-		jsr gettrack
+		ldx #DEV_2A03_DPCM
+		lda ActTbl, x
+		tax
 		lda $4015
 		and #%00010000					;DPCM再生bitを直接読む
 		bne @keyon
@@ -526,7 +385,7 @@ YPOS_CPU = $bf
 		dec PVolume + 1
 	:	lda #$ff
 		sta CH5KEY + 0
-		jmp cpu
+		jmp exp
 	;発音中の場合
 	@keyon:
 		lda #YPOS5 + 8
@@ -552,6 +411,308 @@ YPOS_CPU = $bf
 	@volume:
 		lda #4
 		sta PVolume + 1
+
+	exp:
+.ifdef VRC6
+	;---------------VRC6 ch1---------------
+		ldx #DEV_VRC6_SQR1
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP1KEY + 0
+		jmp vrc6_02
+	;発音中の場合
+	@keyon:
+		jsr freq2note
+		ldy #3
+		jsr draw_note
+	@volume:
+		lda Volume, x
+		sta ExpVolume
+	;--------------VRC6 ch2--------------
+	vrc6_02:
+		ldx #DEV_VRC6_SQR2
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP2KEY + 0
+		jmp vrc6_saw
+	;発音中の場合
+	@keyon:
+		jsr freq2note
+		ldy #4
+		jsr draw_note
+	@volume:
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+		;--------------VRC6 saw--------------
+	vrc6_saw:
+		ldx #DEV_VRC6_SAW
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP3KEY + 0
+		jmp @volume
+	;発音中の場合
+	@keyon:
+		jsr freq2note_saw
+		ldy #6
+		jsr draw_note
+		;--------------VRC6 Volume--------------
+	@volume:
+		lda Volume, x
+		lsr
+		clc
+		adc ExpVolume
+		lsr
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3		;音量バー隠しのスプライト位置1
+		clc
+		adc #8
+		sta EXPVOL2 + 3		;音量バー隠しのスプライト位置2
+		clc
+		adc #8
+		sta EXPVOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta EXPVOL4 + 3		;音量バー隠しのスプライト位置4
+		lda #0
+		sta ExpVolume
+.endif
+
+.ifdef MMC5
+	;---------------MMC5 ch1---------------
+		ldx #DEV_MMC5_SQR1
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP1KEY + 0
+		jmp mmc5_02
+	;発音中の場合
+	@keyon:
+		jsr freq2note
+		ldy #3
+		jsr draw_note
+	@volume:
+		lda Volume, x
+		sta ExpVolume
+	;--------------MMC5 ch2--------------
+	mmc5_02:
+		ldx #DEV_MMC5_SQR2
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP2KEY + 0
+		jmp @sum_volume
+	;発音中の場合
+	@keyon:
+		jsr freq2note
+		ldy #4
+		jsr draw_note
+	@volume:
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+		;--------------MMC5 Volume--------------
+	@sum_volume:
+		lda ExpVolume
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3		;音量バー隠しのスプライト位置1
+		clc
+		adc #8
+		sta EXPVOL2 + 3		;音量バー隠しのスプライト位置2
+		clc
+		adc #8
+		sta EXPVOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta EXPVOL4 + 3		;音量バー隠しのスプライト位置4
+		lda #0
+		sta ExpVolume
+.endif
+
+.ifdef SS5B
+	;---------------SS5B ch1---------------
+	ss5b_01:
+		ldx #DEV_SS5B_SQR1
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP1KEY + 0
+		jmp ss5b_02
+	@keyon:
+		jsr freq2note_ss5b
+		ldy #3
+		jsr draw_note
+		lda Volume, x
+		sta ExpVolume
+
+	;---------------SS5B ch2---------------
+	ss5b_02:
+		ldx #DEV_SS5B_SQR2
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP2KEY + 0
+		jmp ss5b_03
+	@keyon:
+		jsr freq2note_ss5b
+		ldy #4
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------SS5B ch3---------------
+	ss5b_03:
+		ldx #DEV_SS5B_SQR3
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP3KEY + 0
+		jmp @sum_volume
+	@keyon:
+		jsr freq2note_ss5b
+		ldy #5
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------SS5B Volume---------------
+	@sum_volume:
+		lda ExpVolume
+		lsr
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3
+		clc
+		adc #8
+		sta EXPVOL2 + 3
+		clc
+		adc #8
+		sta EXPVOL3 + 3
+		clc
+		adc #8
+		sta EXPVOL4 + 3
+		lda #0
+		sta ExpVolume
+.endif
+
+.ifdef FDS
+	;---------------FDS---------------
+		ldx #DEV_FDS
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP1KEY + 0
+		lda #$02
+		sta PExpOctHead
+		sta PExpOctave
+		sta PExpNote
+		sta PExpSharp
+		lda #0
+		jmp @sum_volume
+	;発音中の場合
+	@keyon:
+		jsr freq2note_fds
+		lda DspWork + 2
+		bmi @blank_note
+		clc
+		adc #$30
+		sta PExpOctave
+		ldy DspWork + 3
+		lda charmap, y
+		sta PExpNote
+		lda halftone, y
+		beq @natural_note
+		lda #$45
+		bne @write_sharp
+	@natural_note:
+		lda #$02
+	@write_sharp:
+		sta PExpSharp
+		lda #$42
+		sta PExpOctHead
+		jmp @draw_note
+	@blank_note:
+		lda #$02
+		sta PExpOctHead
+		sta PExpOctave
+		sta PExpNote
+		sta PExpSharp
+	@draw_note:
+		ldy #3
+		jsr draw_note
+	@volume:
+		lda Volume, x
+		;--------------FDS Volume--------------
+	@sum_volume:
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3		;音量バー隠しのスプライト位置1
+		clc
+		adc #8
+		sta EXPVOL2 + 3		;音量バー隠しのスプライト位置2
+		clc
+		adc #8
+		sta EXPVOL3 + 3		;音量バー隠しのスプライト位置3
+		clc
+		adc #8
+		sta EXPVOL4 + 3		;音量バー隠しのスプライト位置4
+.endif
 
 	cpu:
 		;ドロップカウンタ表示
@@ -627,375 +788,125 @@ YPOS_CPU = $bf
 		lda #0
 		sta CpuCtrH
 
-	exp:
-.ifdef VRC6
-	;---------------VRC6 ch1---------------
-		lda #DEV_VRC6_SQR1
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
-	@keyoff:
-		lda #$ff
-		sta EXP1KEY + 0
-		jmp vrc6_02
-	;発音中の場合
-	@keyon:
-		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
-		sta EXP1KEY + 0
-		jsr freq2note
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta EXP1KEY + 3			;ハイライト鍵盤の位置
-	;半音計算
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta EXP1KEY + 1			;ハイライト鍵盤の形
-		lda #%00000000
-		sta EXP1KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$5e
-		sta EXP1KEY + 1			;ハイライト鍵盤の形
-		lda #%00000010
-		sta EXP1KEY + 2			;パレット番号
-	@volume:
-		lda Volume, x
-		sta ExpVolume
-	;--------------VRC6 ch2--------------
-	vrc6_02:
-		lda #DEV_VRC6_SQR2
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
-	@keyoff:
-		lda #$ff
-		sta EXP2KEY + 0
-		jmp vrc6_saw
-	;発音中の場合
-	@keyon:
-		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
-		sta EXP2KEY + 0
-		jsr freq2note
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta EXP2KEY + 3			;ハイライト鍵盤の位置
-	;半音計算
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta EXP2KEY + 1			;ハイライト鍵盤の形
-		lda #%00000000
-		sta EXP2KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$5e
-		sta EXP2KEY + 1			;ハイライト鍵盤の形
-		lda #%00000010
-		sta EXP2KEY + 2			;パレット番号
-	@volume:
-		lda Volume, x
-		clc
-		adc ExpVolume
-		sta ExpVolume
-		;--------------VRC6 saw--------------
-	vrc6_saw:
-		lda #DEV_VRC6_SAW
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
-	@keyoff:
-		lda #$ff
-		sta EXP3KEY + 0
-		jmp @volume
-	;発音中の場合
-	@keyon:
-		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
-		sta EXP3KEY + 0
-		jsr freq2note_saw
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta EXP3KEY + 3			;ハイライト鍵盤の位置
-	;半音計算
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta EXP3KEY + 1			;ハイライト鍵盤の形
-		lda #%00000001
-		sta EXP3KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$5e
-		sta EXP3KEY + 1			;ハイライト鍵盤の形
-		lda #%00000011
-		sta EXP3KEY + 2			;パレット番号
-		;--------------VRC6 Volume--------------
-	@volume:
-		lda Volume, x
-		lsr
-		clc
-		adc ExpVolume
-		lsr
-		clc
-		adc #$b8
-		sta EXPVOL1 + 3		;音量バー隠しのスプライト位置1
-		clc
-		adc #8
-		sta EXPVOL2 + 3		;音量バー隠しのスプライト位置2
-		clc
-		adc #8
-		sta EXPVOL3 + 3		;音量バー隠しのスプライト位置3
-		clc
-		adc #8
-		sta EXPVOL4 + 3		;音量バー隠しのスプライト位置4
-		lda #0
-		sta ExpVolume
-.endif
-
-.ifdef MMC5
-	;---------------MMC5 ch1---------------
-		lda #DEV_MMC5_SQR1
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
-	@keyoff:
-		lda #$ff
-		sta EXP1KEY + 0
-		jmp mmc5_02
-	;発音中の場合
-	@keyon:
-		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
-		sta EXP1KEY + 0
-		jsr freq2note
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta EXP1KEY + 3			;ハイライト鍵盤の位置
-	;半音計算
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta EXP1KEY + 1			;ハイライト鍵盤の形
-		lda #%00000000
-		sta EXP1KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$5e
-		sta EXP1KEY + 1			;ハイライト鍵盤の形
-		lda #%00000010
-		sta EXP1KEY + 2			;パレット番号
-	@volume:
-		lda Volume, x
-		sta ExpVolume
-	;--------------MMC5 ch2--------------
-	mmc5_02:
-		lda #DEV_MMC5_SQR2
-		sta DspWork
-		jsr gettrack
-		cmp #1
-		beq @keyon
-	@keyoff:
-		lda #$ff
-		sta EXP2KEY + 0
-		jmp @sum_volume
-	;発音中の場合
-	@keyon:
-		lda #YPOS_EXP + 8		;ハイライト鍵盤を表示
-		sta EXP2KEY + 0
-		jsr freq2note
-	;鍵盤の位置計算
-	@pos:
-		lda #0
-		ldy DspWork + 2
-	@L:
-		clc
-		adc #21
-		dey
-		bne @L
-		adc #$30
-		ldy DspWork + 3
-		adc posmap, y
-		sta EXP2KEY + 3			;ハイライト鍵盤の位置
-	;半音計算
-	@note:
-		lda DspWork + 3
-		tay
-		lda halftone, y
-		bne @half
-		lda DspWork + 3
-		cmp #4
-		beq @sqr
-		cmp #11
-		beq @sqr
-		lda #$5d
-		jmp @write
-	@sqr:
-		lda #$5c
-	@write:
-		sta EXP2KEY + 1			;ハイライト鍵盤の形
-		lda #%00000000
-		sta EXP2KEY + 2			;パレット番号
-		jmp @volume
-	@half:
-		lda #$5e
-		sta EXP2KEY + 1			;ハイライト鍵盤の形
-		lda #%00000010
-		sta EXP2KEY + 2			;パレット番号
-	@volume:
-		lda Volume, x
-		clc
-		adc ExpVolume
-		sta ExpVolume
-		;--------------MMC5 Volume--------------
-	@sum_volume:
-		lda ExpVolume
-		clc
-		adc #$b8
-		sta EXPVOL1 + 3		;音量バー隠しのスプライト位置1
-		clc
-		adc #8
-		sta EXPVOL2 + 3		;音量バー隠しのスプライト位置2
-		clc
-		adc #8
-		sta EXPVOL3 + 3		;音量バー隠しのスプライト位置3
-		clc
-		adc #8
-		sta EXPVOL4 + 3		;音量バー隠しのスプライト位置4
-		lda #0
-		sta ExpVolume
-.endif
-
-
 	end:
 		rts
 .endproc
 
-;DspWorkに音源番号を入れて実行すると
-;アクティブな音源があるかどうかを調べて
-;aに結果、xにトラック番号を入れて返す
-.proc gettrack
-		ldx #LAST_TRACK
-		stx DspWork + 1
-		lda #0
-		sta DspWork + 2
-	@loop:
-		lda Device, x
-		cmp DspWork
-		beq @exec
-		bcc @end			;目的の番号より小さくなったら打ち切る
-		dex
-		bmi @end
-		stx DspWork + 1
-		jmp @loop
-	@exec:
-		lda Frags, x
-		and #FRAG_END
-		bne @next
-		lda Volume, x
-		beq @next
-		lda #1
-		sta DspWork + 2
-		stx DspWork + 1
-	@next:
-		dex
-		bmi @end
-		jmp @loop
-	@end:
-		ldx DspWork + 1
+
+; Xのトラックを、Yの音程表示チャンネルへ描画する
+.proc draw_note
+		txa
+		pha
+		sty DspChannel
+
+		ldx DspChannel
 		lda DspWork + 2
+		sec
+		sbc note_octave_shift, x
+		bmi @clamp_low
+		sta DspWork
+		lda DspWork + 3
+		sta DspWork + 1
+		jmp @set_key_y
+	@clamp_low:
+		lda #0
+		sta DspWork
+		sta DspWork + 1
+		jmp @set_key_y
+
+	@set_key_y:
+		lda note_y, x
+		ldy note_oam_offset, x
+		sta CH1KEY + 0, y
+
+		lda DspWork
+		beq @lowest
+		cmp #8
+		bcc @position
+		lda #147
+		ldy #$0b
+		jmp @write_position
+	@position:
+		tay
+		lda #0
+	@position_loop:
+		clc
+		adc #21
+		dey
+		bne @position_loop
+	@lowest:
+		ldy DspWork + 1
+	@write_position:
+		clc
+		adc #$30
+		clc
+		adc posmap, y
+		ldx DspChannel
+		ldy note_oam_offset, x
+		sta CH1KEY + 3, y
+
+		cpx #3
+		bcs @note_shape
+		lda DspWork
+		clc
+		adc #$30
+		sta POctave, x
+		ldy DspWork + 3
+		lda charmap, y
+		sta PNote, x
+		lda #$42
+		sta POctHead, x
+
+	@note_shape:
+		lda DspWork + 3
+		tay
+		lda halftone, y
+		bne @half
+		lda #$02
+		cpx #3
+		bcs :+
+		sta PSharp, x
+	:	lda DspWork + 3
+		cmp #4
+		beq @square
+		cmp #11
+		beq @square
+		lda #$5d
+		jmp @write_key
+	@square:
+		lda #$5c
+	@write_key:
+		ldy note_oam_offset, x
+		sta CH1KEY + 1, y
+		lda note_palette, x
+		sta CH1KEY + 2, y
+		jmp @end
+	@half:
+		lda #$45
+		cpx #3
+		bcs :+
+		sta PSharp, x
+	:	ldy note_oam_offset, x
+		lda #$5e
+		sta CH1KEY + 1, y
+		lda note_palette, x
+		ora #%00000010
+		sta CH1KEY + 2, y
+	@end:
+		pla
+		tax
 		rts
 .endproc
+
+note_oam_offset:
+	.byte	CH1, CH2, CH3, EXP1, EXP1 + 4, EXP1 + 8, EXP1 + 8
+note_y:
+	.byte	YPOS1 + 8, YPOS2 + 8, YPOS3 + 8
+	.byte	YPOS_EXP + 8, YPOS_EXP + 8, YPOS_EXP + 8, YPOS_EXP + 8
+note_octave_shift:
+	.byte	0, 0, 1, 0, 0, 0, 0
+note_palette:
+	.byte	0, 0, 0, 0, 0, 0, 1
 
 
 .proc dsp_write
@@ -1075,6 +986,21 @@ YPOS_CPU = $bf
 		sta $2007
 		lda PSharp + 2
 		sta $2007
+.ifdef FDS
+		;----------------FDS----------------
+		lda #$21
+		sta $2006
+		lda #$f1
+		sta $2006
+		lda PExpOctHead
+		sta $2007
+		lda PExpOctave
+		sta $2007
+		lda PExpNote
+		sta $2007
+		lda PExpSharp
+		sta $2007
+.endif
 		lda #$21
 		sta $2006
 		lda #$97
@@ -1242,7 +1168,7 @@ YPOS_CPU = $bf
 		dex
 		bne border2
 		lda #$00
-		ldx #$80
+		ldx #$40
 	black2:
 		sta $2007
 		dex
@@ -1393,6 +1319,48 @@ YPOS_CPU = $bf
 		lda #$68
 		sta $2007
 		lda #$69
+		sta $2007
+		lda #$21
+		sta $2006
+		lda #$f6
+		sta $2006
+		lda #$28
+		sta $2007
+		lda #$29
+		sta $2007
+		sta $2007
+		sta $2007
+		sta $2007
+.endif
+
+.ifdef SS5B
+		lda #$6a
+		sta $2007
+		lda #$6b
+		sta $2007
+		lda #$6c
+		sta $2007
+		lda #$6d
+		sta $2007
+		lda #$21
+		sta $2006
+		lda #$f6
+		sta $2006
+		lda #$28
+		sta $2007
+		lda #$29
+		sta $2007
+		sta $2007
+		sta $2007
+		sta $2007
+.endif
+
+.ifdef FDS
+		lda #$70
+		sta $2007
+		lda #$71
+		sta $2007
+		lda #$72
 		sta $2007
 		lda #$21
 		sta $2006
@@ -1691,6 +1659,59 @@ YPOS_CPU = $bf
 		lda #$d0
 		sta EXPVOL4 + 3
 .endif
+
+.ifdef SS5B
+		lda #$ff
+		sta EXP1KEY + 0
+		sta EXP2KEY + 0
+		sta EXP3KEY + 0
+		lda #YPOS_EXP
+		sta EXPVOL1 + 0
+		sta EXPVOL2 + 0
+		sta EXPVOL3 + 0
+		sta EXPVOL4 + 0
+		lda #$02
+		sta EXPVOL1 + 1
+		sta EXPVOL2 + 1
+		sta EXPVOL3 + 1
+		sta EXPVOL4 + 1
+		lda #$b8
+		sta EXPVOL1 + 3
+		lda #$c0
+		sta EXPVOL2 + 3
+		lda #$c8
+		sta EXPVOL3 + 3
+		lda #$d0
+		sta EXPVOL4 + 3
+.endif
+
+.ifdef FDS
+		lda #$ff
+		sta EXP1KEY + 0
+		lda #$02
+		sta PExpOctHead
+		sta PExpOctave
+		sta PExpNote
+		sta PExpSharp
+		lda #YPOS_EXP
+		sta EXPVOL1 + 0
+		sta EXPVOL2 + 0
+		sta EXPVOL3 + 0
+		sta EXPVOL4 + 0
+		lda #$02
+		sta EXPVOL1 + 1
+		sta EXPVOL2 + 1
+		sta EXPVOL3 + 1
+		sta EXPVOL4 + 1
+		lda #$b8
+		sta EXPVOL1 + 3
+		lda #$c0
+		sta EXPVOL2 + 3
+		lda #$c8
+		sta EXPVOL3 + 3
+		lda #$d0
+		sta EXPVOL4 + 3
+.endif
 		
 		;BG書き換えの変数初期化
 		lda #00
@@ -1810,22 +1831,28 @@ YPOS_CPU = $bf
 		rts
 	start:
 		ldy #0
-		lda #0
 		lda Freq_L, x
 		sta DspWork
 		lda Freq_H, x
 		sta DspWork + 1
 		bne @L
 		lda DspWork
-		cmp #$0b					;オクターブ9以上はo8b固定
+		cmp #$0d
 		bcc @o9
-		cmp #$1b					;オクターブ8以上は別処理
+		cmp #$1b
 		bcc @o8
-		jmp @L
+		bcs @L
 	@o9:
-		lda #8
+		lda #9
 		sta DspWork + 2
-		lda #$0d
+		lda DspWork
+		asl
+		clc
+		adc #1
+		sec
+		sbc #$0d
+		tay
+		lda Freq_Note_H, y
 		sta DspWork + 3
 		rts
 	@o8:
@@ -1842,7 +1869,7 @@ YPOS_CPU = $bf
 		lda DspWork + 1
 		bne @E
 		lda DspWork
-		cmp #$36				;レジスタ値が$34(52)+2より小さくなるまでオクターブを上げる
+		cmp #$37				;レジスタ値が$35(53)+2より小さくなるまでオクターブを上げる
 		bcc next
 	@E:
 		lsr DspWork + 1
@@ -1857,7 +1884,7 @@ YPOS_CPU = $bf
 		sta DspWork + 2
 		lda DspWork
 		sec
-		sbc #$1b				;レジスタ値1b(27)がo7bなのでそれを0とする
+		sbc #$1a				;レジスタ値1a(26)がo7bなのでそれを0とする
 		tay
 		lda Freq_Note, y
 		sta DspWork + 3
@@ -1873,22 +1900,26 @@ YPOS_CPU = $bf
 		rts
 	start:
 		ldy #0
-		lda #0
 		lda Freq_L, x
 		sta DspWork
 		lda Freq_H, x
 		sta DspWork + 1
 		bne @L
 		lda DspWork
-		cmp #$10					;オクターブ9以上はo8b固定
+		cmp #$10
 		bcc @o9
-		cmp #$1b					;オクターブ8以上は別処理
+		cmp #$20
 		bcc @o8
-		jmp @L
+		bcs @L
 	@o9:
-		lda #8
+		lda #9
 		sta DspWork + 2
-		lda #$0d
+		lda DspWork
+		asl
+		sec
+		sbc #$10
+		tay
+		lda Freq_Note_Saw_H, y
 		sta DspWork + 3
 		rts
 	@o8:
@@ -1896,7 +1927,7 @@ YPOS_CPU = $bf
 		sta DspWork + 2
 		lda DspWork
 		sec
-		sbc #$10				;レジスタ値$10がo8bなのでそれを0とする
+		sbc #$10
 		tay
 		lda Freq_Note_Saw_H, y
 		sta DspWork + 3
@@ -1928,6 +1959,109 @@ YPOS_CPU = $bf
 .endproc
 .endif
 
+.ifdef SS5B
+.proc freq2note_ss5b
+		lda Freq_L, x
+		bne start
+		lda Freq_H, x
+		bne start
+		rts
+	start:
+		ldy #0
+		lda Freq_L, x
+		sta DspWork
+		lda Freq_H, x
+		sta DspWork + 1
+		bne @L
+		lda DspWork
+		cmp #$1c
+		bcs @L
+		ldy #7
+	@high:
+		asl DspWork
+		iny
+		lda DspWork
+		cmp #$1c
+		bcc @high
+		sty DspWork + 2
+		sec
+		sbc #$1c
+		tay
+		lda Freq_Note, y
+		sta DspWork + 3
+		rts
+	@L:
+		lda DspWork + 1
+		bne @E
+		lda DspWork
+		cmp #$37				;レジスタ値が$35(53)+2より小さくなるまでオクターブを上げる
+		bcc next
+	@E:
+		lsr DspWork + 1
+		ror DspWork
+		iny
+		jmp @L
+	next:
+		sty DspWork + 2			;7-上げた数がオクターブ
+		lda #7
+		sec
+		sbc DspWork + 2
+		sta DspWork + 2
+		lda DspWork
+		sec
+		sbc #$1a				;レジスタ値$1aがo6bなのでそれを0とする
+		tay
+		lda Freq_Note, y
+		sta DspWork + 3
+		rts
+.endproc
+.endif
+
+.ifdef FDS
+.proc freq2note_fds
+		lda Freq_L, x
+		bne start
+		lda Freq_H, x
+		bne start
+		rts
+	start:
+		ldy #0
+		lda Freq_L, x
+		sta DspWork
+		lda Freq_H, x
+		sta DspWork + 1
+		bne @L
+		lda DspWork
+		cmp #$26					;オクターブ0未満は非表示
+		bcs @L
+		lda #$ff
+		sta DspWork + 2
+		lda #0
+		sta DspWork + 3
+		rts
+	@L:
+		lda DspWork + 1
+		bne @E
+		lda DspWork
+		cmp #$4a				;レジスタ値が$48+2より小さくなるまでオクターブを下げる
+		bcc next
+	@E:
+		lsr DspWork + 1
+		ror DspWork
+		iny
+		jmp @L
+	next:
+		sty DspWork + 2			;下げた数がオクターブ
+		lda DspWork
+		sec
+		sbc #$26				;レジスタ値$26がo0cなのでそれを0とする
+		tay
+		lda Freq_Note_Fds, y
+		sta DspWork + 3
+		rts
+.endproc
+.endif
+
 
 ;ノートナンバーを位置に変換するテーブル
 posmap:
@@ -1944,9 +2078,10 @@ halftone:
 ;逆引きテーブル
 ;o7b~o7cまでのレジスタ値から音階を引ける
 Freq_Note:
-	.byte	$0b, $0a, $0a, $09, $09, $08, $08, $07, $07, $06, $06, $05, $05, $05, $04, $04
-	.byte	$03, $03, $03, $02, $02, $01, $01, $01, $00, $00, $00
+	.byte	$0b, $0b, $0a, $0a, $09, $09, $08, $08, $07, $07, $06, $06, $05, $05, $04, $04
+	.byte	$03, $03, $03, $02, $02, $02, $01, $01, $01, $00, $00, $00
 
+;o8-o9の短周期用逆引きテーブル
 Freq_Note_H:
 	.byte	$0b, $0a, $09, $08, $07, $06, $05, $04
 	.byte	$04, $03, $02, $02, $01, $00, $00, $00
@@ -1954,9 +2089,17 @@ Freq_Note_H:
 .ifdef VRC6
 Freq_Note_Saw:
 	.byte	$0b, $0b, $0a, $0a, $09, $09, $08, $08, $07, $07, $06, $06, $06, $05, $05, $04
-	.byte	$04, $04, $03, $03, $03, $02, $02, $02, $01, $01, $01, $00, $00, $00, $00, $00
+	.byte	$04, $04, $04, $03, $03, $02, $02, $02, $01, $01, $01, $00, $00, $00, $00, $00
 
 Freq_Note_Saw_H:
 	.byte	$0b, $0a, $09, $08, $07, $06, $05, $05
 	.byte	$04, $03, $03, $02, $01, $01, $00, $00
+.endif
+
+;o0c~o0bまでのレジスタ値から音階を引ける
+.ifdef FDS
+Freq_Note_Fds:
+	.byte	$00, $00, $01, $01, $02, $02, $02, $03, $03, $03, $04, $04, $04, $05, $05, $05
+	.byte	$06, $06, $06, $07, $07, $07, $07, $08, $08, $08, $09, $09, $09, $09, $0a, $0a
+	.byte	$0a, $0a, $0b, $0b
 .endif

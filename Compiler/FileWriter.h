@@ -11,7 +11,7 @@ private:
 	std::string copyright;
 	int musicnum;
 	int dpcmoffset;
-	int extdevice;
+	int expdevice;
 	std::map<int, DpcmInfo> dpcmlist;
 	std::vector<unsigned char> seqdata;
 
@@ -21,6 +21,7 @@ public:
 
 	void createBin();
 	void createNes();
+	void createFds();
 	void createNsf();
 };
 

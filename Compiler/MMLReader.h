@@ -70,7 +70,7 @@
 #define DEV_SS5B_SQR3		12
 #define DEV_FDS				13
 
-enum ExtDev
+enum Expdev
 {
 	VRC6 = 1,
 	VRC7 = 2,
@@ -138,7 +138,7 @@ public:
 	std::map<int, DpcmInfo> dpcmlist;
 	std::vector<unsigned char> seqdata;
 	int dpcmoffset;
-	int extdevice;
+	int expdevice;
 
 	MMLReader();
 	MMLReader(std::wstring& input);

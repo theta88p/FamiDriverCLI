@@ -47,10 +47,50 @@ start:
 	sta $f001  ; disable IRQ
 .endif
 
+.ifdef MMC5
+	lda #$03
+	sta $5100  ; 8K PRG bank mode
 	lda #%10000000
 	sta $5114
 	lda #%10000001
 	sta $5115
+	lda #%10000010
+	sta $5116
+	lda #%10000011
+	sta $5117
+.endif
+
+.ifdef SS5B
+	ldx #$00
+@ss5b_chr:
+	stx $8000  ; Select CHR bank register 0-7
+	stx $a000  ; Map the matching 1K CHR bank
+	inx
+	cpx #$08
+	bne @ss5b_chr
+
+	lda #$09
+	sta $8000  ; CPU $8000-$9FFF = PRG bank 0
+	lda #$00
+	sta $a000
+	lda #$0a
+	sta $8000  ; CPU $A000-$BFFF = PRG bank 1
+	lda #$01
+	sta $a000
+	lda #$0b
+	sta $8000  ; CPU $C000-$DFFF = PRG bank 2
+	lda #$02
+	sta $a000
+	lda #$0c
+	sta $8000  ; Mirroring: vertical
+	lda #$00
+	sta $a000
+.endif
+
+.ifdef FDS
+lda #$22	;ミラーリング設定
+sta $4025
+.endif
 
 ;===============================
 ;	メモリ初期化
@@ -112,7 +152,7 @@ exit:
 
 	;---------------
 	; PPU Control
-	lda	#%10101000		;V-Blank NMI: enable
+	lda	#%00101000		;V-Blank NMI: disabled until driver init completes
 	sta	$2000
 
 	lda	#%00011110
@@ -135,10 +175,10 @@ exit:
 	ldy	#$f0
 	sta	$2003
 	ldx	#$40
-@loop:	sty	$2007
-	sta	$2007
-	sta	$2007
-	sty	$2007
+@loop:	sty	$2004
+	sta	$2004
+	sta	$2004
+	sty	$2004
 	dex
 	bne	@loop
 

@@ -18,7 +18,7 @@ MMLReader::MMLReader()
     f_offset = 0;
     n_offset = 0;
     t_offset = 0;
-    extdevice = 0;
+    expdevice = 0;
 }
 
 MMLReader::MMLReader(std::wstring& input) : MMLReader()
@@ -113,7 +113,7 @@ void MMLReader::readMML()
     ss.clear();
     ss.seekg(0);    //読み込み位置を戻す
     
-    if (extdevice & ExtDev::FDS)
+    if (expdevice & Expdev::FDS)
     {
         readWaveData(fds_wavdata);
 		std::copy(fds_wavdata.begin(), fds_wavdata.end(), std::back_inserter(body));
@@ -196,7 +196,7 @@ void MMLReader::readMML()
 
                 //トラック数 x 4byte（トラックのアドレスとトラック番号と音源番号） + トラックヘッダの終端コード + デフォ音長データ
                 int trheadsize = track * 4 + 1 + 1;
-                if (extdevice & ExtDev::FDS)
+                if (expdevice & Expdev::FDS)
                 {
 					trheadsize += 4; //FDSの波形アドレス分
                 }
@@ -206,7 +206,7 @@ void MMLReader::readMML()
                 trhead.push_back(0xff);             //トラックヘッダ終端
                 trhead.push_back(lengthtbl[3]);     //デフォルトのデフォルト音長（4分音符）
 
-                if (extdevice & ExtDev::FDS)
+                if (expdevice & Expdev::FDS)
                 {
                     trhead.push_back(fds_wavaddr & 0xff); //FDSの波形アドレス
                     trhead.push_back(fds_wavaddr >> 8);
@@ -317,7 +317,7 @@ void MMLReader::readDifinitions()
             {
                 getStrInQuote(copyright);
             }
-            else if (isNextStr("extdevice"))
+            else if (isNextStr("expdevice"))
             {
                 std::string str;
                 while (!ss.eof())
@@ -335,32 +335,32 @@ void MMLReader::readDifinitions()
 
                 if (str.find("vrc6") != std::string::npos)
                 {
-                    extdevice |= ExtDev::VRC6;
+                    expdevice |= Expdev::VRC6;
                 }
 
                 if (str.find("vrc7") != std::string::npos)
                 {
-                    extdevice |= ExtDev::VRC7;
+                    expdevice |= Expdev::VRC7;
                 }
 
                 if (str.find("fds") != std::string::npos)
                 {
-                    extdevice |= ExtDev::FDS;
+                    expdevice |= Expdev::FDS;
                 }
 
                 if (str.find("mmc5") != std::string::npos)
                 {
-                    extdevice |= ExtDev::MMC5;
+                    expdevice |= Expdev::MMC5;
                 }
 
                 if (str.find("n163") != std::string::npos)
                 {
-                    extdevice |= ExtDev::N163;
+                    expdevice |= Expdev::N163;
                 }
 
                 if (str.find("ss5b") != std::string::npos)
                 {
-                    extdevice |= ExtDev::SS5B;
+                    expdevice |= Expdev::SS5B;
                 }
             }
         }
@@ -1948,7 +1948,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             }
             else if (isNextStr("fds"))
             {
-                if ((extdevice & ExtDev::FDS) && tr.device == DEV_FDS)
+                if ((expdevice & Expdev::FDS) && tr.device == DEV_FDS)
                 {
                     if (isNextChar('m'))   //FDSモジュレータ番号指定
                     {

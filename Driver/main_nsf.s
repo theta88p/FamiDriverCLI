@@ -29,6 +29,9 @@ bgm_00:		.addr	_BGM0
 .proc	_main
 
 	jsr _init
+	
+	lda	#%10101000
+	sta	$2000
 
 ;Wait_Next_Flame:
 ;	jmp	Wait_Next_Flame

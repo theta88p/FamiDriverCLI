@@ -15,6 +15,27 @@ static char nsfhead[]{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4e, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+static char fdshead[]{
+    0x46, 0x44, 0x53, 0x1a, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+
+static char kyodaku[]{
+    0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x17, 0x12, 0x17, 0x1d, 0x0e,
+    0x17, 0x0d, 0x18, 0x24, 0x28, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24,
+    0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x0f, 0x0a, 0x16, 0x12, 0x15, 0x22, 0x24, 0x0c, 0x18,
+    0x16, 0x19, 0x1e, 0x1d, 0x0e, 0x1b, 0x24, 0x1d, 0x16, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24,
+    0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24,
+    0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24, 0x24,
+    0x24, 0x24, 0x1d, 0x11, 0x12, 0x1c, 0x24, 0x19, 0x1b, 0x18, 0x0d, 0x1e, 0x0c, 0x1d, 0x24, 0x12,
+    0x1c, 0x24, 0x16, 0x0a, 0x17, 0x1e, 0x0f, 0x0a, 0x0c, 0x1d, 0x1e, 0x1b, 0x0e, 0x0d, 0x24, 0x24,
+    0x24, 0x24, 0x0a, 0x17, 0x0d, 0x24, 0x1c, 0x18, 0x15, 0x0d, 0x24, 0x0b, 0x22, 0x24, 0x17, 0x12,
+    0x17, 0x1d, 0x0e, 0x17, 0x0d, 0x18, 0x24, 0x0c, 0x18, 0x27, 0x15, 0x1d, 0x0d, 0x26, 0x24, 0x24,
+    0x24, 0x24, 0x18, 0x1b, 0x24, 0x0b, 0x22, 0x24, 0x18, 0x1d, 0x11, 0x0e, 0x1b, 0x24, 0x0c, 0x18,
+    0x16, 0x19, 0x0a, 0x17, 0x22, 0x24, 0x1e, 0x17, 0x0d, 0x0e, 0x1b, 0x24, 0x24, 0x24, 0x24, 0x24,
+    0x24, 0x24, 0x15, 0x12, 0x0c, 0x0e, 0x17, 0x1c, 0x0e, 0x24, 0x18, 0x0f, 0x24, 0x17, 0x12, 0x17,
+    0x1d, 0x0e, 0x17, 0x0d, 0x18, 0x24, 0x0c, 0x18, 0x27, 0x15, 0x1d, 0x0d, 0x26, 0x26, 0x24, 0x24,
+};
 
 FileWriter::FileWriter()
 {
@@ -31,7 +52,7 @@ FileWriter::FileWriter(std::wstring& path, MMLReader& reader)
     dpcmoffset = reader.dpcmoffset;
     dpcmlist = reader.dpcmlist;
     seqdata = reader.seqdata;
-    extdevice = reader.extdevice;
+    expdevice = reader.expdevice;
 }
 
 void FileWriter::createBin()
@@ -57,6 +78,274 @@ void FileWriter::createBin()
     ofs.close();
 }
 
+void FileWriter::createFds()
+{
+    std::wstring dir;
+    Utils::GetModuleDir(dir);
+    std::wstring drv = dir + L"bin\\dsp_fds_code.bin";
+    std::wstring chr = dir + L"bin\\dsp_fds_chr.bin";
+    std::wstring vec = dir + L"bin\\dsp_fds_vector.bin";
+
+    const int fdssidesize = 65500;
+    const int dpcmaddr = 0xc000;
+    const int dpcmend = 0xdffa;
+    const int prgaddr = 0x6000;
+    const int chraddr = 0x0000;
+    const int vecaddr = 0xdffa;
+
+    auto readFile = [](const std::wstring& path)
+    {
+        std::vector<unsigned char> data;
+        std::ifstream ifs;
+        ifs.open(path, std::ifstream::in | std::ifstream::binary);
+        if (!ifs)
+        {
+            std::cerr << "Faild to open dsp file." << std::endl;
+            exit(1);
+        }
+
+        char c;
+        while (true)
+        {
+            ifs.read(&c, sizeof(char));
+            if (!ifs.eof())
+            {
+                data.push_back((unsigned char)c);
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return data;
+    };
+
+    auto drvdata = readFile(drv);
+    auto chrdata = readFile(chr);
+    auto vecdata = readFile(vec);
+
+    std::vector<unsigned char> dpcmdata;
+    for (int i = 0; i < dpcmoffset; i++)
+    {
+        dpcmdata.push_back(0);
+    }
+
+    std::ifstream ifsd;
+    int dpcmsize = 0;
+    char c;
+
+    for (const auto& [n, file] : dpcmlist)
+    {
+        dpcmsize += file.size;
+    }
+
+    if (dpcmaddr + dpcmsize + dpcmoffset > dpcmend)
+    {
+        std::cerr << "DPCM data size has reached maximum." << std::endl;
+        std::cerr << "DPCM data : " << dpcmsize << " bytes, Max : " << dpcmend - dpcmoffset - dpcmaddr << " bytes" << std::endl;
+        exit(1);
+    }
+
+    for (const auto& [n, file] : dpcmlist)
+    {
+        ifsd.open(std::filesystem::path(file.path), std::ifstream::binary);
+
+        for (int i = 0; i < file.size; i++)
+        {
+            if (ifsd)
+            {
+                ifsd.read(&c, sizeof(char));
+                dpcmdata.push_back((unsigned char)c);
+            }
+            else
+            {
+                std::cerr << "Faild to read DPCM file." << std::endl;
+                exit(1);
+            }
+        }
+
+        ifsd.close();
+    }
+
+    std::vector<unsigned char> prgdata;
+    std::copy(drvdata.begin(), drvdata.end(), std::back_inserter(prgdata));
+    std::copy(seqdata.begin(), seqdata.end(), std::back_inserter(prgdata));
+
+    if (prgaddr + prgdata.size() > dpcmaddr)
+    {
+        std::cerr << "Sequence data size has reached maximum." << std::endl;
+        std::cerr << "Seq data : " << seqdata.size() << " bytes, Max : " << dpcmaddr - (prgaddr + drvdata.size()) << " bytes" << std::endl;
+        exit(1);
+    }
+
+    while (prgaddr + prgdata.size() < dpcmaddr)
+    {
+        prgdata.push_back(0);
+    }
+
+    std::copy(dpcmdata.begin(), dpcmdata.end(), std::back_inserter(prgdata));
+
+    if (prgaddr + prgdata.size() > vecaddr)
+    {
+        std::cerr << "DPCM data size has reached maximum." << std::endl;
+        std::cerr << "DPCM data : " << dpcmsize << " bytes, Max : " << vecaddr - dpcmoffset - dpcmaddr << " bytes" << std::endl;
+        exit(1);
+    }
+
+    while (prgaddr + prgdata.size() < vecaddr)
+    {
+        prgdata.push_back(0);
+    }
+
+    std::copy(vecdata.begin(), vecdata.end(), std::back_inserter(prgdata));
+
+    struct FdsFile
+    {
+        unsigned char id;
+        const char* name;
+        int address;
+        unsigned char type;
+        std::vector<unsigned char> data;
+    };
+
+    std::vector<FdsFile> files;
+    files.push_back({ 1, "FCDSPPRG", prgaddr, 0, prgdata });
+    files.push_back({ 2, "FCDSPCHR", chraddr, 1, chrdata });
+    const unsigned char lastFileId = files.back().id;
+    const unsigned char visibleFileCount = files.size();
+
+    std::vector<unsigned char> side;
+    auto pushByte = [&side](unsigned char value)
+    {
+        side.push_back(value);
+    };
+    auto pushWord = [&side](int value)
+    {
+        side.push_back((unsigned char)(value & 0xff));
+        side.push_back((unsigned char)((value >> 8) & 0xff));
+    };
+    auto pushString = [&side](const char* text, int length)
+    {
+        for (int i = 0; i < length; i++)
+        {
+            side.push_back((unsigned char)text[i]);
+        }
+    };
+
+    pushByte(0x01);
+    pushString("*NINTENDO-HVC*", 14);
+    pushByte(0x01);
+    pushString("FDS", 3);
+    pushByte(0x20);
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x00);
+	pushByte(lastFileId);   // 最初に読み込むファイル（すべてのファイルを読み込む）
+    for (int i = 0; i < 5; i++)
+    {
+        pushByte(0xff);
+    }
+    pushByte(0x61);     // 製造年月日
+    pushByte(0x01);
+    pushByte(0x01);
+    pushByte(0x49);
+    pushByte(0x61);
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x02);
+    for (int i = 0; i < 5; i++)
+    {
+        pushByte(0x00);
+    }
+    pushByte(0x61);     // 書き換え年月日
+    pushByte(0x01);
+    pushByte(0x01);
+    pushByte(0x00);
+    pushByte(0x80);
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x07);
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x00);
+
+    pushByte(0x02);
+	pushByte(visibleFileCount + 1); // ファイル数 + 1（許諾ファイル分）
+
+	pushByte(0x03); // 許諾ファイル
+    pushByte(0x00);
+    pushByte(0x00);
+    pushByte(0x4b);
+    pushByte(0x59);
+    pushByte(0x4f);
+    pushByte(0x44);
+    pushByte(0x41);
+    pushByte(0x4b);
+    pushByte(0x55);
+    pushByte(0x2d);
+    pushByte(0x00);
+    pushByte(0x28);
+    pushByte(0xe0);
+    pushByte(0x00);
+    pushByte(0x02);
+    pushByte(0x04);
+
+	for (int i = 0; i < 0xe0; i++)
+	{
+		pushByte(kyodaku[i]);
+	}
+
+    for (const auto& file : files)
+    {
+        pushByte(0x03);
+        pushByte(file.id);
+        pushByte(file.id);
+        pushString(file.name, 8);
+        pushWord(file.address);
+        pushWord((int)file.data.size());
+        pushByte(file.type);
+
+        pushByte(0x04);
+        std::copy(file.data.begin(), file.data.end(), std::back_inserter(side));
+    }
+
+    if (side.size() > fdssidesize)
+    {
+        std::cerr << "FDS disk side size has reached maximum." << std::endl;
+        std::cerr << "FDS side : " << side.size() << " bytes, Max : " << fdssidesize << " bytes" << std::endl;
+        exit(1);
+    }
+
+    while (side.size() < fdssidesize)
+    {
+        side.push_back(0);
+    }
+
+    std::ofstream ofs;
+    ofs.open(outputPath, std::ofstream::out | std::ofstream::binary);
+    if (!ofs)
+    {
+        std::cerr << "Faild to write file." << std::endl;
+        exit(1);
+    }
+
+    for (const auto& h : fdshead)
+    {
+        ofs.write(&h, sizeof(char));
+    }
+
+    for (const auto& s : side)
+    {
+        ofs.write((const char*)&s, sizeof(char));
+    }
+
+    ofs.close();
+}
+
 
 void FileWriter::createNes()
 {
@@ -66,29 +355,31 @@ void FileWriter::createNes()
     std::wstring drv = dir;
     std::wstring data = dir;
 
-    if (extdevice & ExtDev::VRC6)
+    if (expdevice & Expdev::VRC6)
     {
         drv += L"bin\\dsp_vrc6_code.bin";
         data += L"bin\\dsp_vrc6_data.bin";
     }
-    else if (extdevice & ExtDev::VRC7)
+    else if (expdevice & Expdev::VRC7)
     {
     }
-    else if (extdevice & ExtDev::FDS)
+    else if (expdevice & Expdev::FDS)
     {
-        //drv += L"bin\\drv_fds.bin";
+        std::cerr << "FDS is not supported by NES file output." << std::endl;
+        exit(1);
     }
-    else if (extdevice & ExtDev::MMC5)
+    else if (expdevice & Expdev::MMC5)
     {
         drv += L"bin\\dsp_mmc5_code.bin";
         data += L"bin\\dsp_mmc5_data.bin";
     }
-    else if (extdevice & ExtDev::N163)
+    else if (expdevice & Expdev::N163)
     {
     }
-    else if (extdevice & ExtDev::SS5B)
+    else if (expdevice & Expdev::SS5B)
     {
-        //drv += L"bin\\drv_ss5b.bin";
+        drv += L"bin\\dsp_ss5b_code.bin";
+        data += L"bin\\dsp_ss5b_data.bin";
     }
     else
     {
@@ -120,19 +411,24 @@ void FileWriter::createNes()
     int dpcmaddr = 0x4000 + nesheadsize;
     int dpcmend = 0x7eb0 + nesheadsize;
 
-    if (extdevice & ExtDev::VRC6)
+    if (expdevice & Expdev::VRC6)
     {
         neshead[0x04] = 0x02; //PRG16K x2
         neshead[0x06] = 0x81; //VRC6
 		neshead[0x07] = 0x10; //VRC6
 	}
-    else if (extdevice & ExtDev::MMC5)
+    else if (expdevice & Expdev::MMC5)
     {
         neshead[0x04] = 0x02; //PRG16K x2
         neshead[0x06] = 0x51; //MMC5
 		neshead[0x07] = 0x0;  //MMC5
     }
-
+    else if (expdevice & Expdev::SS5B)
+    {
+        neshead[0x04] = 0x02; //PRG16K x2
+        neshead[0x06] = 0x51; //Sunsoft FME-7 / 5B
+		neshead[0x07] = 0x40;
+    }
 
     if (nesheadsize + drvsize + seqdata.size() > dpcmaddr + dpcmoffset)
     {
@@ -296,31 +592,31 @@ void FileWriter::createNsf()
     nsfhead[0x06] = musicnum;//曲数
     nsfhead[0x08] = 0x00;   //シーケンスデータの開始アドレス
     nsfhead[0x09] = 0x80;
-    nsfhead[0x0a] = 0x30;   //初期化アドレス
+    nsfhead[0x0a] = 0x2d;   //初期化アドレス
     nsfhead[0x0b] = 0x80;
-    nsfhead[0x0c] = 0x47;   //再生アドレス
+    nsfhead[0x0c] = 0x3d;   //再生アドレス
     nsfhead[0x0d] = 0x80;
-    nsfhead[0x7b] = extdevice;   //拡張音源
+    nsfhead[0x7b] = expdevice;   //拡張音源
 
-    if (extdevice & ExtDev::VRC6)
+    if (expdevice & Expdev::VRC6)
     {
         drv += L"bin\\drv_vrc6.bin";
     }
-    else if (extdevice & ExtDev::VRC7)
+    else if (expdevice & Expdev::VRC7)
     {
     }
-    else if (extdevice & ExtDev::FDS)
+    else if (expdevice & Expdev::FDS)
     {
         drv += L"bin\\drv_fds.bin";
     }
-    else if (extdevice & ExtDev::MMC5)
+    else if (expdevice & Expdev::MMC5)
     {
         drv += L"bin\\drv_mmc5.bin";
     }
-    else if (extdevice & ExtDev::N163)
+    else if (expdevice & Expdev::N163)
     {
     }
-    else if (extdevice & ExtDev::SS5B)
+    else if (expdevice & Expdev::SS5B)
     {
         drv += L"bin\\drv_ss5b.bin";
     }

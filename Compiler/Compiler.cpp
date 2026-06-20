@@ -114,13 +114,17 @@ int wmain(int argc, wchar_t* argv[])
         }
     }
 
+    std::wcout << "Input: " << input << std::endl;
+    MMLReader reader(input);
+    reader.readMML();
+
     if (raw)
     {
         ext = L"bin";
     }
     else if (nes)
     {
-        ext = L"nes";
+        ext = (reader.expdevice & Expdev::FDS) ? L"fds" : L"nes";
     }
     else
     {
@@ -143,9 +147,7 @@ int wmain(int argc, wchar_t* argv[])
         output += ext;
     }
 
-    std::wcout << "Input: " << input << std::endl << "Output: " << output << std::endl << std::endl;
-    MMLReader reader(input);
-    reader.readMML();
+    std::wcout << "Output: " << output << std::endl << std::endl;
 
     FileWriter writer(output, reader);
 
@@ -155,7 +157,14 @@ int wmain(int argc, wchar_t* argv[])
     }
     else if (nes)
     {
-        writer.createNes();
+        if (reader.expdevice & Expdev::FDS)
+        {
+            writer.createFds();
+        }
+        else
+        {
+            writer.createNes();
+        }
     }
     else
     {

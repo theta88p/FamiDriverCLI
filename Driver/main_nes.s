@@ -39,6 +39,10 @@ bgm_00:		.addr	BGM0
 
 .proc	_main
 		jsr _init
+
+		lda	#%10000000
+		sta	$2000
+
 		jmp @count
 	@loop:
 		lda DrvFrags

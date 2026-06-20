@@ -8,6 +8,7 @@
 .export		Tone
 .export		Freq_L
 .export		Freq_H
+.export		ActTbl
 .export		drv_main
 .export		drv_init
 .export		drv_sndreq
@@ -87,6 +88,7 @@ LoopN:		.res	MAX_TRACK * MAX_LOOP	;残りループ回数
 LoopAddr_L:	.res	MAX_TRACK * MAX_LOOP	;ループの戻り先L
 LoopAddr_H:	.res	MAX_TRACK * MAX_LOOP	;ループの戻り先H
 
+ActTbl:			.res	16	;デバイス番号から発音中トラックを引くテーブル
 DrvFrags:		.res	1	;ドライバ全体のフラグ
 SpdCtr:			.res	1	;速度カウンタ
 SpdFreq:		.res	1	;速度カウンタに加算する値
@@ -380,6 +382,11 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta FdsModTone	;モジュレータ波形を指定しない場合無効
 		sta FdsPrevMod
 .endif
+		lda #$ff
+		ldx #$0f			;テーブル初期化
+	:	sta ActTbl, x
+		dex
+		bpl :-
 		rts
 .endproc
 
@@ -2012,55 +2019,55 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ; レジスタ書き込み
 ; ------------------------------------------------------------------------
 .proc writereg
-		stx Work
+		lda #$ff
+		sta PrevDev
 	start:
-		lda Device, x
-		cmp PrevDev			;前の音源と違う場合書き込み処理に移行
-		bne exec
-		lda Volume, x		;同じ場合、発音していれば書き込む
-		beq next
-		lda Frags, x
-		and #FRAG_END
-		bne next
-		stx Work
-	next:
-		lda Device, x
-		sta PrevDev
-		dex
-		cpx #$ff
-		beq exec
-		bpl start			;xがマイナスになったら全トラック終了
-		rts
-	exec:
-		ldx Work
-		lda Device, x
-		sta PrevDev
+		lda Device, x		;音源ごとにどのトラックが発音しているか調べる
 		cmp #$ff
-		beq :+			;未使用トラックは処理しない
-		lda Frags, x
-		and #FRAG_END
-		beq :++
-	:	dex
-		stx Work
-		jmp next
-	:	stx ProcTr
+		beq next
+		cmp PrevDev			;前の音源と違う場合テーブルに書き込む
+		beq vol
+	wtbl:
 		lda Device, x
-
+		sta PrevDev
+		tay
+		txa
+		sta ActTbl, y
+	next:
+		dex
+		bpl start
+		jmp int_sqr1		;xがマイナスになったら全トラック終了
+	vol:
+		lda Volume, x		;音量が0なら書き込まない
+		beq next
+		jmp wtbl
+		
 	int_sqr1:
-		cmp #DEV_2A03_SQR1
-		bne int_sqr2
+		ldx #DEV_2A03_SQR1
+		lda ActTbl, x
+		cmp #$ff
+		beq int_sqr2
+		tax
 		ldy #0
-		jmp writesqr
+		jsr writesqr
+		jsr writereg_end
 
 	int_sqr2:
-		cmp #DEV_2A03_SQR2
-		bne int_tri
+		ldx #DEV_2A03_SQR2
+		lda ActTbl, x
+		cmp #$ff
+		beq int_tri
+		tax
 		ldy #4
-		jmp writesqr
+		jsr writesqr
+		jsr writereg_end
 
 	int_tri:
-		cmp #DEV_2A03_TRI
-		bne int_noise
+		ldx #DEV_2A03_TRI
+		lda ActTbl, x
+		cmp #$ff
+		beq int_noise
+		tax
 		lda Freq_L, x
 		sta $400a
 		lda Freq_H, x
@@ -2074,11 +2081,14 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #$80
 	@write:
 		sta $4008
-		jmp writereg_end
+		jsr writereg_end
 
 	int_noise:
-		cmp #DEV_2A03_NOISE
-		bne int_dpcm
+		ldx #DEV_2A03_NOISE
+		lda ActTbl, x
+		cmp #$ff
+		beq int_dpcm
+		tax
 		lda HEnvReg, x
 		and #%00010000		;ハードウェアエンベロープが有効なら以下を実行
 		bne @softenv
@@ -2110,11 +2120,14 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		ora NoteN, x
 		sta $400e
 	@end:
-		jmp writereg_end
+		jsr writereg_end
 
 	int_dpcm:
-		cmp #DEV_2A03_DPCM
-		bne ext
+		ldx #DEV_2A03_DPCM
+		lda ActTbl, x
+		cmp #$ff
+		beq ext
+		tax
 		lda Frags, x
 		and #FRAG_KEYON | FRAG_KEYOFF	;キーオンもキーオフもたっていなければ終了
 		beq @end
@@ -2136,95 +2149,120 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #%00011111
 		sta $4015
 	@end:
-		jmp writereg_end
+		jsr writereg_end
 
 	ext:
 .ifdef VRC6
 	vrc6_sqr1:
-		cmp #DEV_VRC6_SQR1
-		bne vrc6_sqr2
+		ldx #DEV_VRC6_SQR1
+		lda ActTbl, x
+		cmp #$ff
+		beq vrc6_sqr2
+		tax
 		ldy #$90
-		jmp write_vrc6
+		jsr write_vrc6
+		jsr writereg_end
 
 	vrc6_sqr2:
-		cmp #DEV_VRC6_SQR2
-		bne vrc6_saw
+		ldx #DEV_VRC6_SQR2
+		lda ActTbl, x
+		cmp #$ff
+		beq vrc6_saw
+		tax
 		ldy #$a0
-		jmp write_vrc6
+		jsr write_vrc6
+		jsr writereg_end
 
 	vrc6_saw:
-		cmp #DEV_VRC6_SAW
-		bne vrc6_end
+		ldx #DEV_VRC6_SAW
+		lda ActTbl, x
+		cmp #$ff
+		beq vrc6_end
+		tax
 		ldy #$b0
-		jmp write_vrc6
+		jsr write_vrc6
+		jsr writereg_end
 	vrc6_end:
 .endif
 
 .ifdef MMC5
 	mmc5_sqr1:
-		cmp #DEV_MMC5_SQR1
-		bne mmc5_sqr2
+		ldx #DEV_MMC5_SQR1
+		lda ActTbl, x
+		cmp #$ff
+		beq mmc5_sqr2
+		tax
 		ldy #0
-		jmp write_mmc5
+		jsr write_mmc5
+		jsr writereg_end
 
 	mmc5_sqr2:
-		cmp #DEV_MMC5_SQR2
-		bne mmc5_end
+		ldx #DEV_MMC5_SQR2
+		lda ActTbl, x
+		cmp #$ff
+		beq mmc5_end
+		tax
 		ldy #4
-		jmp write_mmc5
+		jsr write_mmc5
+		jsr writereg_end
 	mmc5_end:
 .endif
 
 .ifdef SS5B
 	ss5b_sqr1:
-		cmp #DEV_SS5B_SQR1
-		bne ss5b_sqr2
+		ldx #DEV_SS5B_SQR1
+		lda ActTbl, x
+		cmp #$ff
+		beq ss5b_sqr2
+		tax
 		ldy #0
-		jmp write_ss5b
+		jsr write_ss5b
+		jsr writereg_end
 
 	ss5b_sqr2:
-		cmp #DEV_SS5B_SQR2
-		bne ss5b_sqr3
+		ldx #DEV_SS5B_SQR2
+		lda ActTbl, x
+		cmp #$ff
+		beq ss5b_sqr3
+		tax
 		ldy #1
-		jmp write_ss5b
+		jsr write_ss5b
+		jsr writereg_end
 
 	ss5b_sqr3:
-		cmp #DEV_SS5B_SQR3
-		bne ss5b_end
+		ldx #DEV_SS5B_SQR3
+		lda ActTbl, x
+		cmp #$ff
+		beq ss5b_end
+		tax
 		ldy #2
-		jmp write_ss5b
+		jsr write_ss5b
+		jsr writereg_end
 	ss5b_end:
 .endif
 
 .ifdef FDS
 	fds:
-		cmp #DEV_FDS
-		bne fds_end
-		jmp write_fds
+		ldx #DEV_FDS
+		lda ActTbl, x
+		cmp #$ff
+		beq fds_end
+		tax
+		jsr write_fds
+		jsr writereg_end
 	fds_end:
 .endif
-		jmp writereg_end
+		rts
 .endproc
 
 
 ;1トラック書き込み終了
 .proc writereg_end
-		lda Volume, x		;書き込んだ周波数の保存
-		beq @N
 		ldy Device, x
 		lda Freq_L, x
 		sta PrevFreq_L, y
 		lda Freq_H, x
 		sta PrevFreq_H, y
-	@N:
-		dex
-		bmi end
-		lda Device, x
-		cmp PrevDev
-		beq @N
-		sta PrevDev
-		jmp writereg
-	end:
 		rts
 .endproc
 
@@ -2291,7 +2329,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		ora Freq_H, x
 		sta $4003, y		;ここに書き込むと波形がリセットされるので注意
 	end:
-		jmp writereg_end
+		rts
 .endproc
 
 
@@ -2342,7 +2380,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		ora Freq_H, x
 		sta (Work), y
 	end:
-		jmp writereg_end
+		rts
 .endproc
 .endif
 
@@ -2387,7 +2425,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		ora Freq_H, x
 		sta $5003, y		;ここに書き込むと波形がリセットされるので注意
 	end:
-		jmp writereg_end
+		rts
 .endproc
 .endif
 
@@ -2421,7 +2459,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda NoteN, x
 		sta $e000
 	end:
-		jmp writereg_end
+		rts
 .endproc
 .endif
 
@@ -2567,7 +2605,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta $4083			;ここに書き込むと波形がリセットされるので注意
 		sta $4087
 	end:
-		jmp writereg_end
+		rts
 .endproc
 
 

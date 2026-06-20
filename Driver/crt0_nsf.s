@@ -57,6 +57,9 @@ Clear_Memory:
 ;===============================
 ; Push arguments and call main()
 
+	lda	#%00101000		;V-Blank NMI: disabled until driver init completes
+	sta	$2000
+
 	jsr	_main
 
 ; Call module destructors. This is also the _exit entry.
