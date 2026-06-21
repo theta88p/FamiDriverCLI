@@ -7,6 +7,47 @@ const unsigned char notetbl[] = { 9, 11, 0, 2, 4, 5, 7 };
 /* 1 2 3 4 6 8 12 16 24 32 48 64 */
 const unsigned char nthnotetbl[] = { 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96 };
 
+//ソフトウェアスイープのディレイテーブル（フレーム単位）
+static const unsigned char sweepdelaytbl[] = {
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9, 10, 11, 12, 13, 14, 15,
+    16, 18, 20, 22, 24, 28, 32, 36,
+    40, 48, 56, 64, 80, 96, 128, 255
+};
+
+static bool packSoftwareSweep(int start, int end, int delay, int speed, unsigned char& arg1, unsigned char& arg2)
+{
+    int pitch = end - start;
+    if (pitch < -64 || pitch > 63 || speed == 0 || speed < -7 || speed > 7)
+    {
+        return false;
+    }
+
+    int delayIndex = -1;
+    for (int i = 0; i < static_cast<int>(sizeof(sweepdelaytbl)); i++)
+    {
+        if (sweepdelaytbl[i] == delay)
+        {
+            delayIndex = i;
+            break;
+        }
+    }
+
+    if (delayIndex < 0)
+    {
+        return false;
+    }
+
+    arg1 = static_cast<unsigned char>(pitch) & 0x7f;
+    if (speed < 0)
+    {
+        arg1 |= 0x80;
+        speed = -speed;
+    }
+    arg2 = static_cast<unsigned char>((delayIndex << 3) | speed);
+    return true;
+}
+
 MMLReader::MMLReader()
 {
     totalpos = 0;
@@ -1506,23 +1547,17 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                     else if (cmd == SW_SWEEP)
                     {
-                        data.push_back(cmd);
-
-                        for (int i = 0; i < args.size(); i++)
+                        unsigned char arg1, arg2;
+                        if (args.size() != 4 || !packSoftwareSweep(args[0], args[1], args[2], args[3], arg1, arg2))
                         {
-                            if (i == 0)
-                            {
-                                sweepStart = i;
-                            }
-                            else if (i == 1)
-                            {
-                                data.push_back(args[i] - sweepStart);
-                            }
-                            else
-                            {
-                                data.push_back(args[i]);
-                            }
+                            std::cerr << "Line " << linenum << " : [Map] Software sweep argument is out of range." << std::endl;
+                            exit(1);
                         }
+
+                        data.push_back(cmd);
+                        data.push_back(arg1);
+                        data.push_back(arg2);
+                        sweepStart = args[0];
 
                         usingCmds[cmd] = args;
                         if (usingCmds.count(cmd + 1))
@@ -2421,10 +2456,15 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                                 getc(c);
                                 if (c == ',' && getMultiDigit(speed))
                                 {
+                                    unsigned char arg1, arg2;
+                                    if (!packSoftwareSweep(start, end, delay, speed, arg1, arg2))
+                                    {
+                                        std::cerr << "Line " << linenum << " : Software sweep argument is out of range." << std::endl;
+                                        exit(1);
+                                    }
                                     data.push_back(SW_SWEEP);
-                                    data.push_back(end - start);
-                                    data.push_back(delay);
-                                    data.push_back(speed);
+                                    data.push_back(arg1);
+                                    data.push_back(arg2);
                                     sweepStart = start;
                                     res = true;
                                 }

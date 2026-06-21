@@ -1052,31 +1052,43 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		rts
 		
 	sw_sweep:				;ソフトウェアスイープ
-		lda EnvFrags, x		;引数は終了周波数（+-半音単位）、Delay、Speed。
+		lda EnvFrags, x		;引数1はSpeedの符号と終了周波数（+-半音単位）。
+							;引数2はDelayテーブル番号とSpeed値。
 							;開始周波数はノートの方を変更する。
 		ora #FRAG_SSWP		;フラグを立てる
 		sta EnvFrags, x
 		ldy #1
 		lda (Work), y
+		pha
+		and #$7f
+		cmp #$40
+		bcc @pitch_positive
+		ora #$80
+	@pitch_positive:
 		sta SSwpEndHT, x
 		ldy #2
 		lda (Work), y
+		pha
+		lsr a
+		lsr a
+		lsr a
+		tay
+		lda sw_sweep_delay_table, y
 		sta SSwpDelay, x
-		ldy #3
-		lda (Work), y
-		bpl @N0				;speed値がマイナスだったら
-		eor #$ff
-		clc
-		adc #1
-		sta SSwpRate, x		;その値をRate、Depthを1とする
+		pla
+		and #$07
+		sta SSwpDepth, x
+		pla
+		bpl @shift_mode		;speed値がプラスならビットシフト量とする
+		lda SSwpDepth, x
+		sta SSwpRate, x		;マイナスなら値をRate、Depthを1とする
 		lda #1
 		sta SSwpDepth, x
-		jmp @N1
-	@N0:					;プラスだったら
-		sta SSwpDepth, x	;その値をDepth、Rateを1とする
-		lda #1
+		jmp @speed_ready
+	@shift_mode:
+		lda #$81			;上位ビットはシフトモード、下位はRate=1
 		sta SSwpRate, x
-	@N1:
+	@speed_ready:
 		lda #1
 		sta SSwpCtr, x		;カウンタリセット
 		lda Device, x
@@ -1089,16 +1101,23 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda SSwpEndHT, x	;FDSは周波数値と音程の増減方向が同じ
 		bpl @neg
 	@invert:
+		lda SSwpRate, x
+		bmi @invert_shift
 		lda SSwpDepth, x
 		eor #$ff
 		clc
 		adc #1
 		sta SSwpDepth, x
+		jmp @neg
+	@invert_shift:
+		lda SSwpDepth, x
+		ora #$80
+		sta SSwpDepth, x
 	@neg:
-		lda #4
+		lda #3
 		jsr addptr
 		rts
-		
+
 	sw_sweep_clear:			;ソフトウェアスイープのクリア
 		lda EnvFrags, x
 		and #FRAG_SSWP_CLR	;フラグを降ろす
@@ -1232,6 +1251,12 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 	
 
 .endproc
+
+sw_sweep_delay_table:
+	.byte 0, 1, 2, 3, 4, 5, 6, 7
+	.byte 8, 9, 10, 11, 12, 13, 14, 15
+	.byte 16, 18, 20, 22, 24, 28, 32, 36
+	.byte 40, 48, 56, 64, 80, 96, 128, 255
 
 
 ; ------------------------------------------------------------------------
@@ -1586,6 +1611,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		dec SSwpCtr, x
 		jmp get
 	plus:
+		lda SSwpRate, x
+		bpl @unit_mode
+		jmp shift_plus
+	@unit_mode:
 		clc
 		lda SSwpDepth, x
 		bmi minus
@@ -1594,20 +1623,68 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		bcc @N
 		inc SSwpCur_H, x
 	@N:
+	compare_plus:
 		lda SSwpEnd_H, x		;Depthがプラスの（音が下がる）場合
 		cmp SSwpCur_H, x
-		bcc end					;終了値より大きくなったら終了
-		bne exec				;終了値より小さかったら次へ
+		bcs @compare_or_exec
+		jmp end					;終了値より大きくなったら終了
+	@compare_or_exec:
+		beq @compare_low
+		jmp exec				;終了値より小さかったら次へ
+	@compare_low:
 		lda SSwpEnd_L, x
 		cmp SSwpCur_L, x		;下位バイトも比較
 		bcc end
 		jmp exec
+	shift_plus:
+		clc
+		lda Freq_L, x
+		adc SSwpCur_L, x
+		sta Work
+		lda Freq_H, x
+		adc SSwpCur_H, x
+		sta Work + 1
+		lda SSwpDepth, x
+		and #$07
+		clc
+		adc #2				;Speed 1～7をシフト回数3～9に変換
+		tay
+	@shift_loop:
+		lsr Work + 1
+		ror Work
+		dey
+		bne @shift_loop
+		lda Work			;シフト結果が0でも終点まで進める
+		ora Work + 1
+		bne @depth_ready
+		inc Work
+	@depth_ready:
+		lda SSwpDepth, x
+		bmi shift_minus
+		clc
+		lda SSwpCur_L, x
+		adc Work
+		sta SSwpCur_L, x
+		lda SSwpCur_H, x
+		adc Work + 1
+		sta SSwpCur_H, x
+		jmp compare_plus
+	shift_minus:
+		sec
+		lda SSwpCur_L, x
+		sbc Work
+		sta SSwpCur_L, x
+		lda SSwpCur_H, x
+		sbc Work + 1
+		sta SSwpCur_H, x
+		jmp compare_minus
 	minus:
 		adc SSwpCur_L, x
 		sta SSwpCur_L, x
 		bcs @N
 		dec SSwpCur_H, x
 	@N:
+	compare_minus:
 		lda SSwpEnd_H, x		;Depthがマイナスの（音が上がる）場合
 		cmp SSwpCur_H, x
 		bcc exec				;終了値より大きかったら次へ
@@ -1625,6 +1702,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		jmp get
 	exec:
 		lda SSwpRate, x			;Rateをカウンタに代入
+		and #$7f
 		sta SSwpCtr, x
 	get:
 		clc
