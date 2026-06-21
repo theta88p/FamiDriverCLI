@@ -591,10 +591,6 @@ void FileWriter::createNsf()
     nsfhead[0x06] = musicnum;//曲数
     nsfhead[0x08] = 0x00;   //シーケンスデータの開始アドレス
     nsfhead[0x09] = 0x80;
-    nsfhead[0x0a] = 0x37;   //初期化アドレス
-    nsfhead[0x0b] = 0x80;
-    nsfhead[0x0c] = 0x47;   //再生アドレス
-    nsfhead[0x0d] = 0x80;
     nsfhead[0x7b] = expdevice;   //拡張音源
 
     if (expdevice & Expdev::VRC6)
@@ -632,6 +628,25 @@ void FileWriter::createNsf()
         std::cerr << "Faild file open driver file." << std::endl;
         exit(1);
     }
+
+    unsigned char driverMetadata[11];
+    ifs.read(reinterpret_cast<char*>(driverMetadata), sizeof(driverMetadata));
+    if (ifs.gcount() != sizeof(driverMetadata) ||
+        driverMetadata[0] != 'D' || driverMetadata[1] != 'R' ||
+        driverMetadata[2] != 'F' || driverMetadata[3] != 'M' ||
+        driverMetadata[4] != 'N' || driverMetadata[5] != 'S' ||
+        driverMetadata[6] != 'F')
+    {
+        std::cerr << "Invalid driver metadata." << std::endl;
+        exit(1);
+    }
+
+    nsfhead[0x0a] = driverMetadata[7];   //初期化アドレス
+    nsfhead[0x0b] = driverMetadata[8];
+    nsfhead[0x0c] = driverMetadata[9];   //再生アドレス
+    nsfhead[0x0d] = driverMetadata[10];
+    ifs.clear();
+    ifs.seekg(0, std::ios::beg);
 
     std::ofstream ofs;
     ofs.open(outputPath, std::ofstream::out | std::ofstream::binary);

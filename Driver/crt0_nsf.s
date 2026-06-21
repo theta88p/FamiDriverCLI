@@ -1,6 +1,8 @@
 	.export		exit
 
 	.import		_main
+	.import		_init
+	.import		_play
 
 	; Linker generated symbols
 	.import		__STACK_START__,	__STACK_SIZE__
@@ -12,7 +14,8 @@
 ; Place the startup code in a special segment.
 
 .segment	"STARTUP"
-.byte		"DRFM"
+.byte		"DRFMNSF"
+.addr		_init, _play
 
 start:
 
