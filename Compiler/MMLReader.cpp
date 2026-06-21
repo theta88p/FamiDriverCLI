@@ -2542,7 +2542,11 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                                 if (getMultiDigit(n))
                                 {
                                     amount = n;
-                                    unsigned char v = 0x80 + (unsigned char)(rate & 0x07 << 4) + (unsigned char)(dir & 0x01 << 3) + ((unsigned char)amount & 0x07);
+                                    unsigned char v =
+                                        0x80 +
+                                        (unsigned char)((rate & 0x07) << 4) +
+                                        (unsigned char)((dir & 0x01) << 3) +
+                                        ((unsigned char)amount & 0x07);
                                     data.push_back(HW_SWEEP);
                                     data.push_back(v);
                                     res = true;
