@@ -102,9 +102,11 @@ v+-|Specify relative track volume (-15～+15)
 @d|Detune
 hs|Hardware sweep (Arguments are rate, direction, amount)
 he|Hardware envelope (Arguments are rate, loop or not)
-s|Software sweep (Arguments are starting pitch, ending pitch, delay, speed)
+s|Software sweep (Arguments are starting pitch, ending pitch, delay, speed; pitch difference: -64～63, speed: -7～-1 or 1～7)
 s*|Stop software sweep
 \ |Subroutine
 $|Macro
 pd|pseudo delay (Arguments are delay, volume, nth notes to shorten)
 @m|Specify note map
+
+For software sweep, a positive speed of 1～7 applies 3～9 right shifts to the current frequency value. A negative speed is the frame interval for adding one. Delay must be one of: 0～16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 56, 64, 80, 96, 128, or 255 frames.
