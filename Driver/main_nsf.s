@@ -41,6 +41,7 @@ bgm_00:		.addr	_BGM0
 
 .proc _init
 	pha
+	jsr nsf_select_banks
 	jsr drv_init
 	
 	pla
@@ -53,5 +54,18 @@ bgm_00:		.addr	_BGM0
 
 .proc	_play
 	jmp	drv_main
+	rts
+.endproc
+
+.proc nsf_select_banks
+	pha
+	asl
+	clc
+	adc	#2
+	sta	$5ffa
+	clc
+	adc	#1
+	sta	$5ffb
+	pla
 	rts
 .endproc

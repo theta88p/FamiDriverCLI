@@ -265,12 +265,12 @@ void FileWriter::createFds()
     pushByte(0x00);
     pushByte(0x00);
     pushByte(0x00);
-	pushByte(lastFileId);   // 最初に読み込むファイル（すべてのファイルを読み込む）
+	pushByte(lastFileId);   // 譛蛻昴↓隱ｭ縺ｿ霎ｼ繧繝輔ぃ繧､繝ｫ・医☆縺ｹ縺ｦ縺ｮ繝輔ぃ繧､繝ｫ繧定ｪｭ縺ｿ霎ｼ繧・・
     for (int i = 0; i < 5; i++)
     {
         pushByte(0xff);
     }
-    pushByte(0x61);     // 製造年月日
+    pushByte(0x61);     // 陬ｽ騾蟷ｴ譛域律
     pushByte(0x01);
     pushByte(0x01);
     pushByte(0x49);
@@ -282,7 +282,7 @@ void FileWriter::createFds()
     {
         pushByte(0x00);
     }
-    pushByte(0x61);     // 書き換え年月日
+    pushByte(0x61);     // 譖ｸ縺肴鋤縺亥ｹｴ譛域律
     pushByte(0x01);
     pushByte(0x01);
     pushByte(0x00);
@@ -582,16 +582,16 @@ void FileWriter::createNsf()
     std::wstring dir;
     Utils::GetModuleDir(dir);
     std::wstring drv = dir;
-    int maxfilesize = 0x10080;
+    const int fixeddrvsize = 0x2000;
+    const int musicbanksize = 0x2000;
+    const int dpcmbanksize = 0x4000;
 
     char c;
-    int nsfheadsize = 0x80;
-    int dpcmaddr = 0x4000 + nsfheadsize;
 
-    nsfhead[0x06] = musicnum;//曲数
-    nsfhead[0x08] = 0x00;   //シーケンスデータの開始アドレス
+    nsfhead[0x06] = musicnum; // Total songs
+    nsfhead[0x08] = 0x00;     // Load address
     nsfhead[0x09] = 0x80;
-    nsfhead[0x7b] = expdevice;   //拡張音源
+    nsfhead[0x7b] = expdevice;   // Expansion audio
 
     if (expdevice & Expdev::VRC6)
     {
@@ -622,6 +622,13 @@ void FileWriter::createNsf()
     }
 
     auto drvsize = Utils::GetFileSize(drv);
+    if (drvsize > fixeddrvsize)
+    {
+        std::cerr << "NSF driver size has reached maximum." << std::endl;
+        std::cerr << "Driver data : " << drvsize << " bytes, Max : " << fixeddrvsize << " bytes" << std::endl;
+        exit(1);
+    }
+
     ifs.open(drv, std::ifstream::in | std::ifstream::binary);
     if (!ifs)
     {
@@ -641,10 +648,22 @@ void FileWriter::createNsf()
         exit(1);
     }
 
-    nsfhead[0x0a] = driverMetadata[7];   //初期化アドレス
+    nsfhead[0x0a] = driverMetadata[7];   // Init address
     nsfhead[0x0b] = driverMetadata[8];
-    nsfhead[0x0c] = driverMetadata[9];   //再生アドレス
+    nsfhead[0x0c] = driverMetadata[9];   // Play address
     nsfhead[0x0d] = driverMetadata[10];
+
+    for (int i = 0; i < 8; i++)
+    {
+        nsfhead[0x70 + i] = i;
+    }
+
+    int dpcmbank = 2 + musicnum * 2;
+    nsfhead[0x74] = dpcmbank;
+    nsfhead[0x75] = dpcmbank + 1;
+    nsfhead[0x76] = dpcmbank + 2;
+    nsfhead[0x77] = dpcmbank + 3;
+
     ifs.clear();
     ifs.seekg(0, std::ios::beg);
 
@@ -705,9 +724,9 @@ void FileWriter::createNsf()
         }
     }
 
-    while (true)
+    for (int i = 0; i < fixeddrvsize; i++)
     {
-        if (ifs && ofs)
+        if (ofs)
         {
             ifs.read(&c, sizeof(char));
             if (!ifs.eof())
@@ -716,7 +735,8 @@ void FileWriter::createNsf()
             }
             else
             {
-                break;
+                c = 0;
+                ofs.write(&c, sizeof(char));
             }
         }
         else
@@ -726,34 +746,107 @@ void FileWriter::createNsf()
         }
     }
 
-    if (drvsize + seqdata.size() > dpcmaddr + dpcmoffset)
+    auto readWord = [](const std::vector<unsigned char>& data, int pos)
     {
-        std::cerr << "Sequence data size has reached maximum." << std::endl;
-        std::cerr << "Seq data : " << seqdata.size() << " bytes, Max : " << dpcmaddr + dpcmoffset - drvsize << " bytes" << std::endl;
+        return static_cast<int>(data[pos]) | (static_cast<int>(data[pos + 1]) << 8);
+    };
+
+    auto writeWord = [](std::vector<unsigned char>& data, int pos, int value)
+    {
+        data[pos] = value & 0xff;
+        data[pos + 1] = (value >> 8) & 0xff;
+    };
+
+    if (musicnum < 1 || seqdata.size() < static_cast<size_t>(musicnum * 2))
+    {
+        std::cerr << "Invalid sequence data." << std::endl;
         exit(1);
     }
 
-    for (const auto& s : seqdata)
+    std::vector<int> musicaddr;
+    for (int i = 0; i < musicnum; i++)
     {
-        if (ofs)
+        musicaddr.push_back(readWord(seqdata, i * 2));
+    }
+
+    int commonend = static_cast<int>(seqdata.size());
+    for (const auto& addr : musicaddr)
+    {
+        if (addr < commonend)
         {
-            ofs.write((const char*)&s, sizeof(char));
-        }
-        else
-        {
-            std::cerr << "Faild to write file." << std::endl;
-            exit(1);
+            commonend = addr;
         }
     }
 
-    if (dpcmlist.size() > 0)
+    if (commonend < musicnum * 2 || commonend > static_cast<int>(seqdata.size()))
     {
-        for (int i = nsfheadsize + drvsize + seqdata.size(); i < dpcmaddr + dpcmoffset; i++)
+        std::cerr << "Invalid sequence address." << std::endl;
+        exit(1);
+    }
+
+    auto makeMusicBank = [&](int music) -> std::vector<unsigned char>
+    {
+        int oldstart = musicaddr[music];
+        int oldend = static_cast<int>(seqdata.size());
+        for (const auto& addr : musicaddr)
+        {
+            if (addr > oldstart && addr < oldend)
+            {
+                oldend = addr;
+            }
+        }
+
+        if (oldstart < commonend || oldend > static_cast<int>(seqdata.size()))
+        {
+            std::cerr << "Invalid sequence address." << std::endl;
+            exit(1);
+        }
+
+        std::vector<unsigned char> bank(musicnum * 2, 0);
+        std::copy(seqdata.begin() + musicnum * 2, seqdata.begin() + commonend, std::back_inserter(bank));
+
+        int newstart = static_cast<int>(bank.size());
+        std::copy(seqdata.begin() + oldstart, seqdata.begin() + oldend, std::back_inserter(bank));
+
+        for (int i = 0; i < musicnum; i++)
+        {
+            writeWord(bank, i * 2, newstart);
+        }
+
+        int delta = newstart - oldstart;
+        int pos = newstart;
+        while (pos < static_cast<int>(bank.size()) && bank[pos] != 0xff)
+        {
+            if (pos + 3 >= static_cast<int>(bank.size()))
+            {
+                std::cerr << "Invalid track header." << std::endl;
+                exit(1);
+            }
+
+            int trackaddr = readWord(bank, pos + 2);
+            writeWord(bank, pos + 2, trackaddr + delta);
+            pos += 4;
+        }
+
+        if (bank.size() > musicbanksize)
+        {
+            std::cerr << "Sequence data size has reached maximum." << std::endl;
+            std::cerr << "Seq data : " << bank.size() << " bytes, Max : " << musicbanksize << " bytes" << std::endl;
+            exit(1);
+        }
+
+        bank.resize(musicbanksize, 0);
+        return bank;
+    };
+
+    for (int i = 0; i < musicnum; i++)
+    {
+        auto bank = makeMusicBank(i);
+        for (const auto& s : bank)
         {
             if (ofs)
             {
-                c = 0;
-                ofs.write(&c, sizeof(char));
+                ofs.write(reinterpret_cast<const char*>(&s), sizeof(char));
             }
             else
             {
@@ -771,11 +864,25 @@ void FileWriter::createNsf()
         dpcmsize += file.size;
     }
 
-    if (dpcmaddr + dpcmsize + dpcmoffset > maxfilesize)
+    if (dpcmsize + dpcmoffset > dpcmbanksize)
     {
         std::cerr << "DPCM data size has reached maximum." << std::endl;
-        std::cerr << "DPCM data : " << dpcmsize << " bytes, Max : " << maxfilesize - dpcmoffset - dpcmaddr << " bytes" << std::endl;
+        std::cerr << "DPCM data : " << dpcmsize << " bytes, Max : " << dpcmbanksize - dpcmoffset << " bytes" << std::endl;
         exit(1);
+    }
+
+    for (int i = 0; i < dpcmoffset; i++)
+    {
+        if (ofs)
+        {
+            c = 0;
+            ofs.write(&c, sizeof(char));
+        }
+        else
+        {
+            std::cerr << "Faild to write file." << std::endl;
+            exit(1);
+        }
     }
 
     for (const auto& [n, file] : dpcmlist)

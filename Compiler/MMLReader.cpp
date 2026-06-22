@@ -190,7 +190,16 @@ void MMLReader::readMML()
     readSubRoutine(subsize);
     totalpos += subsize;
 
+    std::vector<SubData> sortedSubdata;
     for (const auto& [k ,v] : subdata)
+    {
+        sortedSubdata.push_back(v);
+    }
+    std::sort(sortedSubdata.begin(), sortedSubdata.end(), [](const SubData& left, const SubData& right)
+    {
+        return left.addr < right.addr;
+    });
+    for (const auto& v : sortedSubdata)
     {
         std::copy(v.data.begin(), v.data.end(), std::back_inserter(body));
     }
@@ -199,14 +208,104 @@ void MMLReader::readMML()
     ss.clear();
     ss.seekg(0);    //読み込み位置を戻す
 
+    auto applyTimebaseAt = [&](int endpos)
+    {
+        std::string src = ss.str();
+        if (endpos < 0 || endpos > static_cast<int>(src.size()))
+        {
+            endpos = static_cast<int>(src.size());
+        }
+
+        int activeTimebase = 96;
+        size_t lineStart = 0;
+        while (lineStart < static_cast<size_t>(endpos))
+        {
+            size_t lineEnd = src.find('\n', lineStart);
+            if (lineEnd == std::string::npos)
+            {
+                lineEnd = src.size();
+            }
+
+            size_t endLimit = static_cast<size_t>(endpos);
+            size_t scanEnd = lineEnd < endLimit ? lineEnd : endLimit;
+            std::string line = src.substr(lineStart, scanEnd - lineStart);
+            size_t comment = line.find("//");
+            if (comment != std::string::npos)
+            {
+                line.resize(comment);
+            }
+
+            size_t pos = 0;
+            while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t' || line[pos] == '\r'))
+            {
+                pos++;
+            }
+
+            if (pos < line.size() && line[pos] == '#')
+            {
+                pos++;
+                while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+                {
+                    pos++;
+                }
+
+                const std::string key = "timebase";
+                bool match = pos + key.size() <= line.size();
+                for (size_t j = 0; match && j < key.size(); j++)
+                {
+                    match = std::tolower(static_cast<unsigned char>(line[pos + j])) == key[j];
+                }
+
+                if (match)
+                {
+                    pos += key.size();
+                    while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+                    {
+                        pos++;
+                    }
+
+                    std::string value;
+                    while (pos < line.size() && line[pos] >= '0' && line[pos] <= '9')
+                    {
+                        value += line[pos];
+                        pos++;
+                    }
+
+                    if (!value.empty())
+                    {
+                        activeTimebase = std::atoi(value.c_str());
+                    }
+                }
+            }
+
+            if (lineEnd == src.size())
+            {
+                break;
+            }
+            lineStart = lineEnd + 1;
+        }
+
+        timebase = activeTimebase;
+        lengthtbl.clear();
+        makeLengthTbl(lengthtbl);
+    };
+
     for (int i = 0; i < music; i++)
     {
-		std::vector<unsigned char> trhead;
-        std::vector<unsigned char> musdata;
-        findStr("music");
-        skipSpace();
-        if (getMultiDigit(n) && n == musiclist[i])
+        bool foundMusic = false;
+
+        while (findStr("music"))
         {
+            skipSpace();
+            if (!(getMultiDigit(n) && n == musiclist[i]))
+            {
+                continue;
+            }
+
+		std::vector<unsigned char> trhead;
+            std::vector<unsigned char> musdata;
+            foundMusic = true;
+            applyTimebaseAt(static_cast<int>(ss.tellg()));
             if (findStr("{"))
             {
                 int seek = ss.tellg();
@@ -255,16 +354,23 @@ void MMLReader::readMML()
                     trhead.push_back(fds_modaddr >> 8);
                 }
 
-                std::copy(trhead.begin(), trhead.end(), std::back_inserter(body));
-                std::copy(musdata.begin(), musdata.end(), std::back_inserter(body));
                 head.push_back(totalpos & 0xff);
                 head.push_back(totalpos >> 8);
-                totalpos += musdata.size();
+                totalpos += trhead.size() + musdata.size();
+                std::copy(trhead.begin(), trhead.end(), std::back_inserter(body));
+                std::copy(musdata.begin(), musdata.end(), std::back_inserter(body));
 
                 linenum = 1;
                 ss.clear();
                 ss.seekg(0);    //読み込み位置を戻す
             }
+            break;
+        }
+
+        if (!foundMusic)
+        {
+            std::cerr << "Music" << musiclist[i] << " is not found." << std::endl;
+            exit(1);
         }
     }
 
@@ -291,12 +397,7 @@ void MMLReader::readDifinitions()
         skipSpace();
         if (c == '#')
         {
-            if (isMusic || isTrack)
-            {
-                std::cerr << "Line " << linenum << " : Please write settings starting with '#' at the beginning of the file." << std::endl;
-                exit(1);
-            }
-            else if (isNextStr("timebase"))
+            if (isNextStr("timebase"))
             {
                 skipSpace();
                 if (getMultiDigit(n))
@@ -305,6 +406,11 @@ void MMLReader::readDifinitions()
                     lengthtbl.clear();
                     makeLengthTbl(lengthtbl);
                 }
+            }
+            else if (isMusic || isTrack)
+            {
+                std::cerr << "Line " << linenum << " : Please write settings starting with '#' at the beginning of the file." << std::endl;
+                exit(1);
             }
             else if (isNextStr("offsetpcm"))
             {
@@ -829,6 +935,14 @@ void MMLReader::readMacro(std::map<std::string, std::string, cmpByStringLength>&
         {
             linenum++;
         }
+        else if (c == '}')
+        {
+            if (isMusic)
+            {
+                isMusic = false;
+                isTrack = false;
+            }
+        }
         else if (c == 't' || c == 'T')
         {
             if (isNextStr("rack"))
@@ -914,6 +1028,89 @@ void MMLReader::readSubRoutine(int& subsize)
     bool isTrack = false;
     bool isMusic = false;
 
+    auto applyTimebaseAt = [&](int endpos)
+    {
+        std::string src = ss.str();
+        if (endpos < 0 || endpos > static_cast<int>(src.size()))
+        {
+            endpos = static_cast<int>(src.size());
+        }
+
+        int activeTimebase = 96;
+        size_t lineStart = 0;
+        while (lineStart < static_cast<size_t>(endpos))
+        {
+            size_t lineEnd = src.find('\n', lineStart);
+            if (lineEnd == std::string::npos)
+            {
+                lineEnd = src.size();
+            }
+
+            size_t endLimit = static_cast<size_t>(endpos);
+            size_t scanEnd = lineEnd < endLimit ? lineEnd : endLimit;
+            std::string line = src.substr(lineStart, scanEnd - lineStart);
+            size_t comment = line.find("//");
+            if (comment != std::string::npos)
+            {
+                line.resize(comment);
+            }
+
+            size_t pos = 0;
+            while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t' || line[pos] == '\r'))
+            {
+                pos++;
+            }
+
+            if (pos < line.size() && line[pos] == '#')
+            {
+                pos++;
+                while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+                {
+                    pos++;
+                }
+
+                const std::string key = "timebase";
+                bool match = pos + key.size() <= line.size();
+                for (size_t j = 0; match && j < key.size(); j++)
+                {
+                    match = std::tolower(static_cast<unsigned char>(line[pos + j])) == key[j];
+                }
+
+                if (match)
+                {
+                    pos += key.size();
+                    while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+                    {
+                        pos++;
+                    }
+
+                    std::string value;
+                    while (pos < line.size() && line[pos] >= '0' && line[pos] <= '9')
+                    {
+                        value += line[pos];
+                        pos++;
+                    }
+
+                    if (!value.empty())
+                    {
+                        activeTimebase = std::atoi(value.c_str());
+                    }
+                }
+            }
+
+            if (lineEnd == src.size())
+            {
+                break;
+            }
+            lineStart = lineEnd + 1;
+        }
+
+        timebase = activeTimebase;
+        lengthtbl.clear();
+        makeLengthTbl(lengthtbl);
+    };
+
+
     while (ss.get(c))
     {
         skipSpace();
@@ -936,6 +1133,7 @@ void MMLReader::readSubRoutine(int& subsize)
                     if (isNextChar('{'))
                     {
                         int pos = ss.tellg();
+                        applyTimebaseAt(pos);
                         std::vector<unsigned char> trhead;
 						std::vector<unsigned char> trbody;
                         int tone = 0;
@@ -955,6 +1153,14 @@ void MMLReader::readSubRoutine(int& subsize)
         else if (c == '\n')
         {
             linenum++;
+        }
+        else if (c == '}')
+        {
+            if (isMusic)
+            {
+                isMusic = false;
+                isTrack = false;
+            }
         }
         else if (c == 't' || c == 'T')
         {
