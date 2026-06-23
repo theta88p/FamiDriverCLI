@@ -1618,6 +1618,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     bool usePDelay = false;
     bool isLooped = false;
 	bool isLoopedMid = false;
+    bool fdsToneSpecified = false;
+    bool fdsModSpecified = false;
     int sweepStart = 0;
     int pddist = 4;
     int pdvol = 0;
@@ -1629,6 +1631,38 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     TrackData tr;
     std::queue<unsigned char> prevnotes;
 	std::vector<unsigned char> data;
+
+    auto setFdsDefaults = [&]()
+    {
+        if (tr.device != DEV_FDS)
+        {
+            return;
+        }
+
+        std::vector<unsigned char> defaults;
+        if (!fdsToneSpecified)
+        {
+            defaults.push_back(TONE);
+            defaults.push_back(0);
+        }
+        if (!fdsModSpecified)
+        {
+            defaults.push_back(FDS_MOD_TONE);
+            defaults.push_back(0);
+        }
+
+        if (defaults.empty())
+        {
+            return;
+        }
+
+        auto insertpos = data.begin();
+        if (data.size() >= 2 && data[0] == HW_ENV && data[1] == 0x80)
+        {
+            insertpos += 2;
+        }
+        data.insert(insertpos, defaults.begin(), defaults.end());
+    };
 
     ss.seekg(startpos);
 
@@ -1828,6 +1862,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         {
                             data.push_back(args[0]);
                             tone = args[0];
+                            if (tr.device == DEV_FDS)
+                            {
+                                fdsToneSpecified = true;
+                            }
                         }
                         usingCmds[cmd] = args;
                     }
@@ -2185,6 +2223,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     data.push_back(TONE);
                     data.push_back(n);
 					tone = n;   //音色を保存
+                    if (tr.device == DEV_FDS)
+                    {
+                        fdsToneSpecified = true;
+                    }
                 }
             }
             else if (isNextStr("fds"))
@@ -2200,6 +2242,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                             {
                                 data.push_back(FDS_MOD_TONE);
                                 data.push_back(n);
+                                fdsModSpecified = true;
                             }
                             else
                             {
@@ -2550,10 +2593,13 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
 
                         usePDelay = false;  //疑似ディレイもリセット
 
+                        setFdsDefaults();
                         data.push_back(TRACK_END);    //終了コード
                         tr.data = data;
                         tracks.push_back(tr);
                         data.clear();
+                        fdsToneSpecified = false;
+                        fdsModSpecified = false;
                     }
 
                     skipSpace();
@@ -2916,6 +2962,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (isTrack)
                 {
                     isTrack = false;
+                    setFdsDefaults();
                     data.push_back(TRACK_END);    //終了コード
                     tr.data = data;
                     tracks.push_back(tr);
