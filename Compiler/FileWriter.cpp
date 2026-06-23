@@ -265,12 +265,12 @@ void FileWriter::createFds()
     pushByte(0x00);
     pushByte(0x00);
     pushByte(0x00);
-	pushByte(lastFileId);   // 譛蛻昴↓隱ｭ縺ｿ霎ｼ繧繝輔ぃ繧､繝ｫ・医☆縺ｹ縺ｦ縺ｮ繝輔ぃ繧､繝ｫ繧定ｪｭ縺ｿ霎ｼ繧・・
+	pushByte(lastFileId);   // 最初に読み込むファイル（すべてのファイルを読み込む）
     for (int i = 0; i < 5; i++)
     {
         pushByte(0xff);
     }
-    pushByte(0x61);     // 陬ｽ騾蟷ｴ譛域律
+    pushByte(0x61);     // 製造年月日
     pushByte(0x01);
     pushByte(0x01);
     pushByte(0x49);
@@ -282,7 +282,7 @@ void FileWriter::createFds()
     {
         pushByte(0x00);
     }
-    pushByte(0x61);     // 譖ｸ縺肴鋤縺亥ｹｴ譛域律
+    pushByte(0x61);     // 書き換え年月日
     pushByte(0x01);
     pushByte(0x01);
     pushByte(0x00);
@@ -588,10 +588,10 @@ void FileWriter::createNsf()
 
     char c;
 
-    nsfhead[0x06] = musicnum; // Total songs
-    nsfhead[0x08] = 0x00;     // Load address
+    nsfhead[0x06] = musicnum; // 曲数
+    nsfhead[0x08] = 0x00;     // シーケンスデータの開始アドレス
     nsfhead[0x09] = 0x80;
-    nsfhead[0x7b] = expdevice;   // Expansion audio
+    nsfhead[0x7b] = expdevice;   // 拡張音源
 
     if (expdevice & Expdev::VRC6)
     {
