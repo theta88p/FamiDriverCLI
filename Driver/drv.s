@@ -74,6 +74,7 @@ FEnvAddr_H:		.res	MAX_TRACK
 FEnvPos:		.res	MAX_TRACK
 FEnvCtr:		.res	MAX_TRACK
 FEnvDelay:		.res	MAX_TRACK
+FEnvShift:		.res	MAX_TRACK
 NEnvAddr_L:		.res	MAX_TRACK	;ノートエンベロープ
 NEnvAddr_H:		.res	MAX_TRACK
 NEnvPos:		.res	MAX_TRACK
@@ -159,7 +160,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ;ed :L		無限ループ
 ;ee	:lx		デフォ音長
 ;ef	:vx/v+-x	ボリューム指定（絶対0～15、相対-15～15）
-;f0	:		未使用
+;f0	:@fsx	音程エンベロープシフト
 ;f1	:@dx	デチューン
 ;f2	:hsx	ハードウェアスイープ
 ;f3	:hex	ハードウェアエンベロープ
@@ -301,6 +302,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta EnvFrags, x
 		sta Tone, x
 		sta Frags, x
+		sta FEnvShift, x
 .ifdef N163
 		sta N163FreqShift, x
 		lda #$80
@@ -1037,6 +1039,14 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #2
 		jsr addptr
 		rts
+
+	freq_env_shift:			;音程エンベロープシフト
+		ldy #1
+		lda (Work), y
+		sta FEnvShift, x
+		lda #2
+		jsr addptr
+		rts
 		
 	detune:					;デチューン
 		ldy #1
@@ -1324,7 +1334,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		.word inf_loop_def - 1
 		.word def_len - 1
 		.word volume - 1
-		.word unknown_cmd - 1
+		.word freq_env_shift - 1
 		.word detune - 1
 		.word hw_sweep - 1
 		.word hw_env - 1
@@ -2170,25 +2180,34 @@ sw_sweep_delay_table:
 		eor #$ff
 		clc
 		adc #1				;符号反転
-		bmi neg				;負の値だったら
+		sta Work + 5
+		lda #0
+		sta Work + 6
+		sta Work + 7
+		lda Work + 5
+		bpl :+
+		dec Work + 6
+		dec Work + 7
+	:	lda FEnvShift, x
+		sta Work + 8
+		beq @add
+	@shift_loop:
+		asl Work + 5
+		rol Work + 6
+		rol Work + 7
+		dec Work + 8
+		bne @shift_loop
+	@add:
 		clc
-		adc Freq_L, x	;周波数に加算
+		lda Freq_L, x
+		adc Work + 5	;周波数に加算
 		sta Freq_L, x
-		bcc frame
-		inc Freq_H, x
-		bne frame
-		inc Freq_X, x
-		jmp frame
-	neg:
-		clc
-		adc Freq_L, x	;周波数に加算
-		sta Freq_L, x
-		bcs frame
-		dec Freq_H, x
 		lda Freq_H, x
-		cmp #$ff
-		bne frame
-		dec Freq_X, x
+		adc Work + 6
+		sta Freq_H, x
+		lda Freq_X, x
+		adc Work + 7
+		sta Freq_X, x
 	frame:
 		lda FEnvCtr, x
 		cmp #2

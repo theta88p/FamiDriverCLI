@@ -44,6 +44,7 @@
 #define VOLUME				0xef
 #define VOLUME_REL			VOLUME
 #define VOLUME_ABS			VOLUME
+#define FREQ_ENV_SHIFT		0xf0
 #define DETUNE				0xf1
 #define HW_SWEEP			0xf2
 #define HW_ENV				0xf3

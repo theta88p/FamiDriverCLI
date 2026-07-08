@@ -2617,6 +2617,21 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 else if (c == 'f' || c == 'F')   //音程エンベロープ
                 {
                     skipSpace();
+                    if (isNextChar('s') || isNextChar('S'))
+                    {
+                        skipSpace();
+                        if (getMultiDigit(n) && n >= 0 && n <= 7)
+                        {
+                            data.push_back(FREQ_ENV_SHIFT);
+                            data.push_back(n);
+                            break;
+                        }
+                        else
+                        {
+                            std::cerr << "Line " << linenum << " : Frequency envelope shift must be 0 to 7." << std::endl;
+                            exit(1);
+                        }
+                    }
                     getAndPushEnvAssign(data, envdata, FREQ_ENV, f_offset);
                     break;
                 }
