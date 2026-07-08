@@ -2,6 +2,7 @@
 #DEBUG_VRC6 = 1
 #DEBUG_MMC5 = 1
 #DEBUG_SS5B = 1
+#DEBUG_N163 = 1
 
 .DEFAULT_GOAL := all
 
@@ -64,9 +65,9 @@ CP      = copy
 
 
 #===============================
-#; �ˑ��֌W�i�w�b�_�[�t�@�C�������A�ˑ��֌W�ɒǉ����邽�߂ɁA��`�j
+#; 依存関係（ヘッダーファイル等を、依存関係に追加するために、定義）
 
-%.o : %.s $(INC_FILES)			#;".inc"�t�@�C�����X�V���ꂽ�ꍇ�́A.s�́A�S���A�Z���u������B
+%.o : %.s $(INC_FILES)			#;".inc"ファイルが更新された場合は、.sは、全部アセンブルする。
 	@echo [Assemble] : $< >>$(ERRLOG_FILE)
 	$(AS) $(ASFLAGS) $< 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
@@ -74,7 +75,7 @@ CP      = copy
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
 	$(AS) drv.s $(ASFLAGS) -D FDS=1 -o drv_fds.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
-	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -D VRC6=1 -D SS5B=1 -D FDS=1 -o drv_all.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -D VRC6=1 -D SS5B=1 -D FDS=1 -D N163=1 -o drv_all.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 	@echo [Assemble] : crt0_nes.s >>$(ERRLOG_FILE)
 	$(AS) crt0_nes.s $(ASFLAGS) -D VRC6=1 -o crt0_nes_vrc6.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
@@ -96,6 +97,10 @@ CP      = copy
 	$(AS) main_nes.s $(ASFLAGS) -D FDS=1 -o main_fds.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 
+drv_n163.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D N163=1 -o drv_n163.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
 dsp_ss5b.o : dsp.s $(INC_FILES)
 	@echo [Assemble] : dsp.s >>$(ERRLOG_FILE)
 	$(AS) dsp.s $(ASFLAGS) -D SS5B=1 -o dsp_ss5b.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
@@ -111,7 +116,7 @@ crt0_nes_fds.o : crt0_nes.s $(INC_FILES)
 main_fds.o : main_nes.s $(INC_FILES)
 	@echo [Assemble] : main_nes.s >>$(ERRLOG_FILE)
 	$(AS) main_nes.s $(ASFLAGS) -D FDS=1 -o main_fds.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
-%.s : %.mml $(DMC_FILES)		#;".dmc"�t�@�C�����X�V���ꂽ�ꍇ�́A.mml�́A�S���R���p�C������B
+%.s : %.mml $(DMC_FILES)		#;".dmc"ファイルが更新された場合は、.mmlは、全部コンパイルする。
 	@echo ======================================================== >>$(LOG_FILE)
 	@echo [Compile] : $< >>$(LOG_FILE)
 	@echo ======================================================== >>$(LOG_FILE)
@@ -123,12 +128,12 @@ main_fds.o : main_nes.s $(INC_FILES)
 #---------------------------------------
 
 #---------------
-#; �A�Z���u������p�w�b�_�[
+#; アセンブリ言語用ヘッダー
 INC_FILES =	drv.inc		\
 			data.bin	\
 
 #---------------
-#; ���o�b�l�t�@�C��
+#; ⊿ＰＣＭファイル
 DMC_FILES =	
 
 
@@ -145,7 +150,7 @@ LIB_FILES =
 ########################################
 
 #---------------
-#; �����J�[�̐ݒ�
+#; リンカーの設定
 ifdef DEBUG
 
 DSP_DATA_FILE =	data_nesd.o
@@ -193,7 +198,7 @@ MAP_DSP_FILE   =	dsp.map
 DBG_DSP_FILE   =	dsp.dbg
 
 #---------------
-#; �\�[�X�t�@�C��
+#; ソースファイル
 ifdef DEBUG
 
 MAIN_NSF_FILES =	main_nsf.o		\
@@ -316,7 +321,7 @@ endif
 
 else
 
-all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_ss5b.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_mmc5 dsp_ss5b dsp_fds
+all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_ss5b.bin drv_n163.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_mmc5 dsp_ss5b dsp_fds
 
 drv.bin : drv.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
@@ -331,6 +336,10 @@ drv_vrc6.bin : drv_vrc6.o $(MAIN_NSF_FILES)
 	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 drv_ss5b.bin : drv_ss5b.o $(MAIN_NSF_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_n163.bin : drv_n163.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
@@ -368,7 +377,7 @@ endif
 #---------------
 #; Crean up
 clean:
-	@$(RM) *.nes		#NES�t�@�C���́A�����Ȃ��ł����B
+	@$(RM) *.nes		#NESファイルは、消さないでおく。
 	@$(RM) *.nsf
 	@$(RM) *.bak
 	@$(RM) *.map

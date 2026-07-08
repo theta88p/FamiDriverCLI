@@ -60,6 +60,9 @@ MMLReader::MMLReader()
     n_offset = 0;
     t_offset = 0;
     expdevice = 0;
+    n163WaveOffsets.assign(16, 0);
+    n163WaveLengthRegs.assign(16, 0xe0);
+    n163WaveFreqShifts.assign(16, 0);
 }
 
 MMLReader::MMLReader(std::wstring& input) : MMLReader()
@@ -83,8 +86,10 @@ void MMLReader::readMML()
     std::vector<unsigned char> body;
     std::vector<unsigned char> fds_wavdata;
 	std::vector<unsigned char> fds_moddata;
+    std::vector<unsigned char> n163_wavdata;
 	int fds_wavaddr = 0;
     int fds_modaddr = 0;
+    int n163_wavaddr = 0;
     std::ifstream ifs;
 
     ifs.open(inputPath);
@@ -167,6 +172,14 @@ void MMLReader::readMML()
 		std::copy(fds_moddata.begin(), fds_moddata.end(), std::back_inserter(body));
 		fds_modaddr = totalpos;
 		totalpos += fds_moddata.size();
+    }
+
+    if (expdevice & Expdev::N163)
+    {
+        readWaveData(n163_wavdata);
+        n163_wavaddr = totalpos;
+        std::copy(n163_wavdata.begin(), n163_wavdata.end(), std::back_inserter(body));
+        totalpos += n163_wavdata.size();
     }
 
     linenum = 1;
@@ -340,6 +353,10 @@ void MMLReader::readMML()
                 {
 					trheadsize += 4; //FDSの波形アドレス分
                 }
+                if (expdevice & Expdev::N163)
+                {
+                    trheadsize += 2; //N163の波形アドレス分
+                }
 
                 int tone = 0;
                 readBrackets(ss.tellg(), trheadsize, trhead, musdata, tone);
@@ -352,6 +369,11 @@ void MMLReader::readMML()
                     trhead.push_back(fds_wavaddr >> 8);
                     trhead.push_back(fds_modaddr & 0xff); //FDSのモジュレータ波形アドレス
                     trhead.push_back(fds_modaddr >> 8);
+                }
+                if (expdevice & Expdev::N163)
+                {
+                    trhead.push_back(n163_wavaddr & 0xff); //N163の波形アドレス
+                    trhead.push_back(n163_wavaddr >> 8);
                 }
 
                 head.push_back(totalpos & 0xff);
@@ -780,7 +802,7 @@ void MMLReader::readDifinitions()
                                         }
                                         else if (c == 'v' || c == 'V')  //ボリューム
                                         {
-                                            cmd = VOLUME_ABS;
+                                            cmd = VOLUME;
                                             getCmdArgs(args);
                                         }
                                         else if (c == 'r' || c == 'R')  //休符
@@ -1405,6 +1427,26 @@ void MMLReader::readWaveData(std::vector<unsigned char>& out)
                                             exit(1);
                                         }
                                     }
+                                    else if (n163w)
+                                    {
+                                        if (wavnum < 0 || wavnum >= 16)
+                                        {
+                                            std::cerr << "Line " << linenum << " : [Wave difinition] N163 wave number must be 0 to 15." << std::endl;
+                                            exit(1);
+                                        }
+
+                                        if (n < 0 || n > 15)
+                                        {
+                                            std::cerr << "Line " << linenum << " : [Wave difinition] N163 waveform data must be 0 to 15." << std::endl;
+                                            exit(1);
+                                        }
+
+                                        if (wavdata[wavnum].size() >= 128)
+                                        {
+                                            std::cerr << "Line " << linenum << " : [Wave difinition] Too many N163 waveform data." << std::endl;
+                                            exit(1);
+                                        }
+                                    }
 
                                     wavdata[wavnum].push_back(n);
                                 }
@@ -1456,9 +1498,65 @@ void MMLReader::readWaveData(std::vector<unsigned char>& out)
         }
     }
 
-    for (const auto& [wavnum, data] : wavdata)
+    if (expdevice & Expdev::N163)
     {
-        std::copy(data.begin(), data.end(), std::back_inserter(out));
+        auto isPowerOfTwoLength = [](int length)
+        {
+            return length >= 4 && length <= 128 && (length & (length - 1)) == 0;
+        };
+
+        auto log2Length = [](int length)
+        {
+            int log = 0;
+            while (length > 1)
+            {
+                length >>= 1;
+                log++;
+            }
+            return log;
+        };
+
+        out.assign(64, 0x88);
+        n163WaveOffsets.assign(16, 0);
+        n163WaveLengthRegs.assign(16, 0xe0);
+        n163WaveFreqShifts.assign(16, 0);
+
+        int sampleOffset = 0;
+        for (const auto& [wavnum, data] : wavdata)
+        {
+            int length = static_cast<int>(data.size());
+            if (!isPowerOfTwoLength(length))
+            {
+                std::cerr << "Line " << linenum << " : [Wave difinition] N163 wave length must be 4, 8, 16, 32, 64 or 128." << std::endl;
+                exit(1);
+            }
+
+            if (sampleOffset + length > 128)
+            {
+                std::cerr << "Line " << linenum << " : [Wave difinition] Too much N163 waveform data. Total wave length must be 128 samples or less." << std::endl;
+                exit(1);
+            }
+
+            n163WaveOffsets[wavnum] = static_cast<unsigned char>(sampleOffset);
+            n163WaveLengthRegs[wavnum] = static_cast<unsigned char>(256 - length);
+            n163WaveFreqShifts[wavnum] = static_cast<unsigned char>(log2Length(length) - 5);
+
+            for (int i = 0; i < length; i += 2)
+            {
+                unsigned char lo = data[i];
+                unsigned char hi = (i + 1 < length) ? data[i + 1] : 8;
+                out[(sampleOffset + i) / 2] = lo | (hi << 4);
+            }
+
+            sampleOffset += length;
+        }
+    }
+    else
+    {
+        for (const auto& [wavnum, data] : wavdata)
+        {
+            std::copy(data.begin(), data.end(), std::back_inserter(out));
+        }
     }
 }
 
@@ -1664,6 +1762,39 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
         data.insert(insertpos, defaults.begin(), defaults.end());
     };
 
+    int n163WaveSetup = -1;
+    auto pushN163WaveSetup = [&](int tone)
+    {
+        if (!(expdevice & Expdev::N163) || tr.device < DEV_N163_CH1 || tr.device > DEV_N163_CH8)
+        {
+            return;
+        }
+
+        if (tone < 0 || tone >= static_cast<int>(n163WaveOffsets.size()))
+        {
+            std::cerr << "Line " << linenum << " : N163 wave number must be 0 to 15." << std::endl;
+            exit(1);
+        }
+
+        unsigned char offset = n163WaveOffsets[tone];
+        if (n163WaveLengthRegs[tone] == 0xe0 && offset == tone * 32)
+        {
+            offset = 0x80;
+        }
+
+        int setup = offset | (n163WaveLengthRegs[tone] << 8) | (n163WaveFreqShifts[tone] << 16);
+        if (setup == n163WaveSetup)
+        {
+            return;
+        }
+
+        data.push_back(N163_WAVE_SETUP);
+        data.push_back(offset);
+        data.push_back(n163WaveLengthRegs[tone]);
+        data.push_back(n163WaveFreqShifts[tone]);
+        n163WaveSetup = setup;
+    };
+
     ss.seekg(startpos);
 
     while (ss.get(c))
@@ -1842,6 +1973,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                     else if (cmd == TONE)
                     {
+                        if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
+                        {
+                            pushN163WaveSetup(args[0]);
+                        }
                         data.push_back(TONE);
 
                         if (tr.device == DEV_2A03_DPCM)     //DPCMトラックなら
@@ -2220,6 +2355,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 }
                 else
                 {
+                    if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
+                    {
+                        pushN163WaveSetup(n);
+                    }
                     data.push_back(TONE);
                     data.push_back(n);
 					tone = n;   //音色を保存
@@ -2359,7 +2498,40 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         std::cerr << "Line " << linenum << " : Invalid FDS command." << std::endl;
                         exit(1);
-					}
+                    }
+                }
+            }
+            else if (isNextStr("n163") || isNextStr("N163"))
+            {
+                if ((expdevice & Expdev::N163) && tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
+                {
+                    if (isNextChar('c') || isNextChar('C'))   //N163 channel count
+                    {
+                        skipSpace();
+                        if (getMultiDigit(n))
+                        {
+                            if (n >= 1 && n <= 8)
+                            {
+                                data.push_back(N163_CH_COUNT);
+                                data.push_back(n);
+                            }
+                            else
+                            {
+                                std::cerr << "Line " << linenum << " : N163 channel count must be 1 to 8." << std::endl;
+                                exit(1);
+                            }
+                        }
+                        else
+                        {
+                            std::cerr << "Line " << linenum << " : N163 channel count is not specified." << std::endl;
+                            exit(1);
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "Line " << linenum << " : Invalid N163 command." << std::endl;
+                        exit(1);
+                    }
                 }
             }
             else if (getc(c))
@@ -2600,6 +2772,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         data.clear();
                         fdsToneSpecified = false;
                         fdsModSpecified = false;
+                        n163WaveSetup = -1;
                     }
 
                     skipSpace();

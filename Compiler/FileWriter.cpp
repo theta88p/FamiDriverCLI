@@ -374,6 +374,8 @@ void FileWriter::createNes()
     }
     else if (expdevice & Expdev::N163)
     {
+        std::cerr << "N163 is not supported by NES file output yet." << std::endl;
+        exit(1);
     }
     else if (expdevice & Expdev::SS5B)
     {
@@ -610,6 +612,7 @@ void FileWriter::createNsf()
     }
     else if (expdevice & Expdev::N163)
     {
+        drv += L"bin\\drv_n163.bin";
     }
     else if (expdevice & Expdev::SS5B)
     {

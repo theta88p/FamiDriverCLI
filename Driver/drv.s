@@ -22,7 +22,7 @@
 
 Frags:			.res	MAX_TRACK	;通常のフラグ
 EnvFrags:		.res	MAX_TRACK	;エンベロープのフラグ
-Work:			.res	7
+Work:			.res	10
 
 ;-----------------------------------------------------------------------
 ; Non Zeropage works
@@ -42,11 +42,13 @@ Volume:			.res	MAX_TRACK	;音量
 Tone:			.res	MAX_TRACK	;上位4bit:元の音色 下位4bit:現在の音色
 Freq_L:			.res	MAX_TRACK	;周波数L
 Freq_H:			.res	MAX_TRACK	;周波数H
+Freq_X:			.res	MAX_TRACK	;周波数上位
 RefFreq_L:		.res	MAX_TRACK	;音程エンベロープ値を加算する前の周波数L
 RefFreq_H:		.res	MAX_TRACK	;音程エンベロープ値を加算する前の周波数H
+RefFreq_X:		.res	MAX_TRACK
 RefNoteN:		.res	MAX_TRACK	;ノートエンベロープ値を加算する前のノートナンバー
-PrevFreq_L:		.res	MAX_TRACK	;前回レジスタに書き込んだ周波数L（音源ごとに保存）
-PrevFreq_H:		.res	MAX_TRACK	;前回レジスタに書き込んだ周波数H（音源ごとに保存）
+PrevFreq_L:		.res	MAX_DEVICE	;前回レジスタに書き込んだ周波数L（音源ごとに保存）
+PrevFreq_H:		.res	MAX_DEVICE	;前回レジスタに書き込んだ周波数H（音源ごとに保存）
 KeyShift:		.res	MAX_TRACK	;キーシフト値
 Detune:			.res	MAX_TRACK	;デチューン値
 InfLoopAddr_L:	.res	MAX_TRACK	;無限ループの戻り先L
@@ -57,8 +59,10 @@ SSwpDepth:		.res	MAX_TRACK	;ソフトウェアスイープの一回に加算す�
 SSwpRate:		.res	MAX_TRACK	;ソフトウェアスイープで何フレームおきに加算するか
 SSwpCur_L:		.res	MAX_TRACK	;ソフトウェアスイープの現在値（相対値）
 SSwpCur_H:		.res	MAX_TRACK	;ソフトウェアスイープの現在値（相対値）
+SSwpCur_X:		.res	MAX_TRACK
 SSwpEnd_L:		.res	MAX_TRACK	;ソフトウェアスイープの終了値（相対値）
 SSwpEnd_H:		.res	MAX_TRACK	;ソフトウェアスイープの終了値（相対値）
+SSwpEnd_X:		.res	MAX_TRACK
 SSwpCtr:		.res	MAX_TRACK	;ソフトウェアスイープのカウンタ
 VEnvAddr_L:		.res	MAX_TRACK	;音量エンベロープのアドレスL
 VEnvAddr_H:		.res	MAX_TRACK	;音量エンベロープのアドレスH
@@ -88,7 +92,7 @@ LoopN:		.res	MAX_TRACK * MAX_LOOP	;残りループ回数
 LoopAddr_L:	.res	MAX_TRACK * MAX_LOOP	;ループの戻り先L
 LoopAddr_H:	.res	MAX_TRACK * MAX_LOOP	;ループの戻り先H
 
-ActTbl:			.res	16	;デバイス番号から発音中トラックを引くテーブル
+ActTbl:			.res	MAX_DEVICE	;デバイス番号から発音中トラックを引くテーブル
 DrvFrags:		.res	1	;ドライバ全体のフラグ
 SpdCtr:			.res	1	;速度カウンタ
 SpdFreq:		.res	1	;速度カウンタに加算する値
@@ -101,6 +105,17 @@ LastTrack:		.res	1	;使用する最大トラック数 - 1
 .ifdef SS5B
 SS5BTone:		.res	3
 SS5BHWEnv:		.res	3	;ハードウェアエンベロープが有効なら1無効なら0
+.endif
+
+.ifdef N163
+N163WavAddr_L:	.res	1
+N163WavAddr_H:	.res	1
+N163ChCount:	.res	1
+N163ChOffset:	.res	1
+N163ChReg:		.res	1
+N163WaveOffset:	.res	MAX_TRACK
+N163WaveLenReg:	.res	MAX_TRACK
+N163FreqShift:	.res	MAX_TRACK
 .endif
 
 .ifdef FDS
@@ -157,6 +172,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ;f9 :@fdsf	FDSモジュレーション周波数
 ;fa	:@fdsm	FDSモジュレータ番号
 ;fb	:@fdse	FDSモジュレーションエンベロープ
+;fc	:@n163c	N163発音数
 
 ; ------------------------------------------------------------------------
 ; main
@@ -248,6 +264,15 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #%00000010
 		sta $4023
 .endif
+.ifdef N163
+		lda #0
+		sta $e000
+		sta N163ChOffset
+		lda #8
+		sta N163ChCount
+		lda #$70
+		sta N163ChReg
+.endif
 		lda #0
 		sta ProcTr
 		sta SpdFreq
@@ -276,6 +301,13 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta EnvFrags, x
 		sta Tone, x
 		sta Frags, x
+.ifdef N163
+		sta N163FreqShift, x
+		lda #$80
+		sta N163WaveOffset, x
+		lda #$e0
+		sta N163WaveLenReg, x
+.endif
 		lda #1
 		sta LenCtr, x
 		sta GateCtr, x
@@ -356,6 +388,18 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta DefLen, x	;デフォルト音長を保存
 		dex
 		bpl @L
+.ifdef N163
+		iny
+		lda (Work), y
+		clc
+		adc SeqAddr_L
+		sta N163WavAddr_L
+		iny
+		lda (Work), y
+		adc SeqAddr_H
+		sta N163WavAddr_H
+		jsr n163_load_wave
+.endif
 .ifdef FDS
 		iny
 		lda (Work), y
@@ -383,7 +427,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta FdsPrevMod
 .endif
 		lda #$ff
-		ldx #$0f			;テーブル初期化
+		ldx #MAX_DEVICE - 1	;テーブル初期化
 	:	sta ActTbl, x
 		dex
 		bpl :-
@@ -472,7 +516,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		bcc lower_cmd
 		cmp #$ec
 		bcc len_note
-		cmp #$fc
+		cmp #$fe
 		bcc upper_cmd
 		
 	unknown_cmd:
@@ -1180,35 +1224,79 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta Ptr_H, x
 		rts
 		
-.ifdef FDS
 	fds_mod_freq:		;FDSモジュレータ周波数
+.ifdef FDS
 		ldy #1
 		lda (Work), y
 		sta FdsModFreq_L
 		ldy #2
 		lda (Work), y
 		sta FdsModFreq_H
+.endif
 		lda #3
 		jsr addptr
 		rts
 		
 	fds_mod_tone:		;FDSモジュレータ番号
+.ifdef FDS
 		ldy #1
 		lda (Work), y
 		sta FdsModTone
+.endif
 		lda #2
 		jsr addptr
 		rts
 		
 	fds_mod_env:		;FDSモジュレータエンベロープ
+.ifdef FDS
 		ldy #1
 		lda (Work), y
 		sta FdsModEnv
 		sta $4084
+.endif
 		lda #2
 		jsr addptr
 		rts
+
+	n163_ch_count:		;N163発音数
+.ifdef N163
+		ldy #1
+		lda (Work), y
+		sta N163ChCount
+		lda #8
+		sec
+		sbc N163ChCount
+		sta N163ChOffset
+		lda N163ChCount
+		sec
+		sbc #1
+		asl
+		asl
+		asl
+		asl
+		sta N163ChReg
+		jsr n163_mute_channels
+		jsr n163_update_freq
 .endif
+		lda #2
+		jsr addptr
+		rts
+
+	n163_wave_setup:	;N163波形設定
+.ifdef N163
+		ldy #1
+		lda (Work), y
+		sta N163WaveOffset, x
+		ldy #2
+		lda (Work), y
+		sta N163WaveLenReg, x
+		ldy #3
+		lda (Work), y
+		sta N163FreqShift, x
+.endif
+		lda #4
+		jsr addptr
+		rts
 		
 	lower_table:
 		.word def_rest - 1
@@ -1245,11 +1333,11 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		.word disable_env - 1
 		.word mem_write - 1
 		.word subroutine - 1
-.ifdef FDS
 		.word fds_mod_freq - 1
 		.word fds_mod_tone - 1
 		.word fds_mod_env - 1
-.endif
+		.word n163_ch_count - 1
+		.word n163_wave_setup - 1
 	upper_table_end:
 	
 
@@ -1367,7 +1455,7 @@ sw_sweep_delay_table:
 		rts
 	calcoct:
 		lda NoteN, x		;周波数計算
-		jsr calcfreq		;Work + 2とWork + 3に入って帰ってくる
+		jsr calcfreq		;Work + 2とWork + 3 (N163はWork + 4も)に入って帰ってくる
 		lda Detune, x		;0でなければデチューン値を加算
 		beq end
 		bmi neg
@@ -1390,6 +1478,9 @@ sw_sweep_delay_table:
 		lda Work + 3
 		sta Freq_H, x
 		sta RefFreq_H, x
+		lda Work + 4
+		sta Freq_X, x
+		sta RefFreq_X, x
 		rts
 .endproc
 
@@ -1414,16 +1505,28 @@ sw_sweep_delay_table:
 		cmp #12
 		bcs oct
 	load:
-		sty Work + 4	;周波数テーブルから周波数を取得
-		asl
-		tay
+		sty Work + 8	;周波数テーブルから周波数を取得
+		sta Work + 9
 		lda Device, x
+.ifdef VRC6
 		cmp #DEV_VRC6_SAW
 		beq saw
-		cmp #DEV_SS5B_SQR1
-		bcs ss5b
+.endif
+.ifdef FDS
 		cmp #DEV_FDS
 		beq fds
+.endif
+.ifdef N163
+		cmp #DEV_N163_CH1
+		bcs n163
+.endif
+.ifdef SS5B
+		cmp #DEV_SS5B_SQR1
+		bcs ss5b
+.endif
+		lda Work + 9
+		asl
+		tay
 		lda Freq_Tbl, y
 		sta Work + 2
 		lda Freq_Tbl + 1, y
@@ -1431,6 +1534,9 @@ sw_sweep_delay_table:
 		jmp calc
 	saw:
 .ifdef	VRC6
+		lda Work + 9
+		asl
+		tay
 		lda Freq_Saw, y
 		sta Work + 2
 		lda Freq_Saw + 1, y
@@ -1439,7 +1545,10 @@ sw_sweep_delay_table:
 .endif
 	ss5b:
 .ifdef SS5B
-		inc Work + 4	;5Bは-1オクターブから
+		inc Work + 8	;5Bは-1オクターブから
+		lda Work + 9
+		asl
+		tay
 		lda Freq_5B, y
 		sta Work + 2
 		lda Freq_5B + 1, y
@@ -1448,39 +1557,160 @@ sw_sweep_delay_table:
 .endif
 	fds:
 .ifdef FDS
+		lda Work + 9
+		asl
+		tay
 		lda Freq_FDS, y
 		sta Work + 2
 		lda Freq_FDS + 1, y
 		sta Work + 3
-		lda Work + 4	;オクターブから周波数を計算する(FDSは周波数と比例なので6オクターブから)
+		lda Work + 8	;オクターブから周波数を計算する(FDSは周波数と比例なので6オクターブから)
 		cmp #6
 		bcc @N
 		lda #6
-		sta Work + 4
+		sta Work + 8
 		rts
 	@N:
 		lda #6
 		sec
-		sbc Work + 4
+		sbc Work + 8
 		tay
-		bne @L
+		beq :+
+		jmp calc_loop
+	:	rts
+.endif
+	n163:
+.ifdef N163
+		lda Work + 9
+		asl
+		clc
+		adc Work + 9
+		tay
+		lda Freq_N163, y
+		sta Work + 2
+		lda Freq_N163 + 1, y
+		sta Work + 3
+		lda Freq_N163 + 2, y
+		sta Work + 4
+		lda Work + 8	;N163は周波数と比例なので、発音数と波形長をシフト量に畳み込む
+		cmp #8
+		bcc @oct_ok
+		lda #8
+		sta Work + 8
+	@oct_ok:
+		lda N163ChCount
+		cmp #1
+		bne :+
+		lda #8
+		jmp @shift_sub
+	:	cmp #2
+		bne :+
+		lda #7
+		jmp @shift_sub
+	:	cmp #4
+		bne :+
+		lda #6
+		jmp @shift_sub
+	:	cmp #8
+		bne :+
+		lda #5
+		jmp @shift_sub
+	:	lda #8
+		jsr @shift_sub
+		lda Work + 2
+		sta Work + 5
+		lda Work + 3
+		sta Work + 6
+		lda Work + 4
+		sta Work + 7
+		lda Work + 9
+		asl
+		clc
+		adc Work + 9
+		tay
+		lda Freq_N163_6, y
+		sta Work + 2
+		lda Freq_N163_6 + 1, y
+		sta Work + 3
+		lda Freq_N163_6 + 2, y
+		sta Work + 4
+		lda #8
+		jsr @shift_sub
+		lda N163ChCount
+		cmp #3
+		beq @C3
+		cmp #5
+		beq @C5
+		cmp #7
+		beq @C7
 		rts
-	@L:
-		lsr Work + 3
+	@C3:
+		lsr Work + 4
+		ror Work + 3
+		ror Work + 2
+		rts
+	@C5:
+		sec
+		lda Work + 2
+		sbc Work + 5
+		sta Work + 2
+		lda Work + 3
+		sbc Work + 6
+		sta Work + 3
+		lda Work + 4
+		sbc Work + 7
+		sta Work + 4
+		rts
+	@C7:
+		clc
+		lda Work + 2
+		adc Work + 5
+		sta Work + 2
+		lda Work + 3
+		adc Work + 6
+		sta Work + 3
+		lda Work + 4
+		adc Work + 7
+		sta Work + 4
+		rts
+	@shift_sub:
+		sec
+		sbc Work + 8
+		sec
+		sbc N163FreqShift, x
+		beq @SR
+		bmi @SL
+		tay
+	@RR:
+		lsr Work + 4
+		ror Work + 3
 		ror Work + 2
 		dey
-		bne @L
+		bne @RR
+	@SR:
+		rts
+	@SL:
+		eor #$ff
+		clc
+		adc #1
+		tay
+	@LL:
+		asl Work + 2
+		rol Work + 3
+		rol Work + 4
+		dey
+		bne @LL
 		rts
 .endif
 	calc:
-		ldy Work + 4	;オクターブから周波数を計算する
-		bne @L
+		ldy Work + 8	;オクターブから周波数を計算する
+		bne calc_loop
 		rts
-	@L:
+	calc_loop:
 		lsr Work + 3
 		ror Work + 2
 		dey
-		bne @L
+		bne calc_loop
 		rts
 .endproc
 
@@ -1498,7 +1728,6 @@ sw_sweep_delay_table:
 		bne next		;終了フラグが立っていなければ処理へ
 		stx ProcTr
 		lda EnvFrags, x
-		sta Work + 5
 		and #FRAG_ENV_DIS
 		beq load				;エンベロープ無効フラグが立っていたら音量処理へ
 	vol:
@@ -1533,8 +1762,10 @@ sw_sweep_delay_table:
 		sta Freq_L, x
 		lda RefFreq_H, x
 		sta Freq_H, x
+		lda RefFreq_X, x
+		sta Freq_X, x
 	@N0:
-		lda Work + 5
+		lda EnvFrags, x
 		and #FRAG_NENV
 		beq @N1
 		jsr noteenv
@@ -1546,23 +1777,26 @@ sw_sweep_delay_table:
 		lda Work + 3
 		sta Freq_H, x
 		sta RefFreq_H, x
+		lda Work + 4
+		sta Freq_X, x
+		sta RefFreq_X, x
 	@N1:
-		lda Work + 5
+		lda EnvFrags, x
 		and #FRAG_SSWP
 		beq @N2
 		jsr ssweep
 	@N2:
-		lda Work + 5
+		lda EnvFrags, x
 		and #FRAG_FENV
 		beq @N3
 		jsr freqenv
 	@N3:
-		lda Work + 5
+		lda EnvFrags, x
 		and #FRAG_TENV
 		beq @N4
 		jsr toneenv
 	@N4:
-		lda Work + 5
+		lda EnvFrags, x
 		and #FRAG_VENV
 		beq tovol
 		jsr volenv
@@ -1585,23 +1819,29 @@ sw_sweep_delay_table:
 		lda #0
 		sta SSwpCur_L, x
 		sta SSwpCur_H, x
+		sta SSwpCur_X, x
 		lda RefNoteN, x			;いったん素の周波数を保存しておく
 		jsr calcfreq
 		lda Work + 2
-		sta Work
+		sta Work + 5
 		lda Work + 3
-		sta Work + 1
+		sta Work + 6
+		lda Work + 4
+		sta Work + 7
 		lda RefNoteN, x
 		clc
 		adc SSwpEndHT, x		;スイープ終了周波数を計算
 		jsr calcfreq
 		lda Work + 2
 		sec
-		sbc Work
+		sbc Work + 5
 		sta SSwpEnd_L, x
 		lda Work + 3
-		sbc Work + 1
+		sbc Work + 6
 		sta SSwpEnd_H, x
+		lda Work + 4
+		sbc Work + 7
+		sta SSwpEnd_X, x
 		lda SSwpDelay, x
 		clc						;カウンタにディレイ値を加算
 		adc SSwpCtr, x
@@ -1620,13 +1860,25 @@ sw_sweep_delay_table:
 	@unit_mode:
 		clc
 		lda SSwpDepth, x
-		bmi minus
+		bpl @plus_depth
+		jmp minus
+	@plus_depth:
 		adc SSwpCur_L, x
 		sta SSwpCur_L, x
 		bcc @N
 		inc SSwpCur_H, x
+		bne @N
+		inc SSwpCur_X, x
 	@N:
 	compare_plus:
+		lda SSwpEnd_X, x
+		cmp SSwpCur_X, x
+		bcs @compare_plus_h
+		jmp end
+	@compare_plus_h:
+		beq @compare_plus_h_eq
+		jmp exec
+	@compare_plus_h_eq:
 		lda SSwpEnd_H, x		;Depthがプラスの（音が下がる）場合
 		cmp SSwpCur_H, x
 		bcs @compare_or_exec
@@ -1637,8 +1889,10 @@ sw_sweep_delay_table:
 	@compare_low:
 		lda SSwpEnd_L, x
 		cmp SSwpCur_L, x		;下位バイトも比較
-		bcc end
+		bcc @compare_plus_end
 		jmp exec
+	@compare_plus_end:
+		jmp end
 	shift_plus:
 		clc
 		lda Freq_L, x
@@ -1647,18 +1901,23 @@ sw_sweep_delay_table:
 		lda Freq_H, x
 		adc SSwpCur_H, x
 		sta Work + 1
+		lda Freq_X, x
+		adc SSwpCur_X, x
+		sta Work + 2
 		lda SSwpDepth, x
 		and #$07
 		clc
 		adc #2				;Speed 1～7をシフト回数3～9に変換
 		tay
 	@shift_loop:
+		lsr Work + 2
 		lsr Work + 1
 		ror Work
 		dey
 		bne @shift_loop
 		lda Work			;シフト結果が0でも終点まで進める
 		ora Work + 1
+		ora Work + 2
 		bne @depth_ready
 		inc Work
 	@depth_ready:
@@ -1671,6 +1930,9 @@ sw_sweep_delay_table:
 		lda SSwpCur_H, x
 		adc Work + 1
 		sta SSwpCur_H, x
+		lda SSwpCur_X, x
+		adc Work + 2
+		sta SSwpCur_X, x
 		jmp compare_plus
 	shift_minus:
 		sec
@@ -1680,14 +1942,25 @@ sw_sweep_delay_table:
 		lda SSwpCur_H, x
 		sbc Work + 1
 		sta SSwpCur_H, x
+		lda SSwpCur_X, x
+		sbc Work + 2
+		sta SSwpCur_X, x
 		jmp compare_minus
 	minus:
 		adc SSwpCur_L, x
 		sta SSwpCur_L, x
 		bcs @N
 		dec SSwpCur_H, x
+		lda SSwpCur_H, x
+		cmp #$ff
+		bne @N
+		dec SSwpCur_X, x
 	@N:
 	compare_minus:
+		lda SSwpEnd_X, x
+		cmp SSwpCur_X, x
+		bcc exec
+		bne end
 		lda SSwpEnd_H, x		;Depthがマイナスの（音が上がる）場合
 		cmp SSwpCur_H, x
 		bcc exec				;終了値より大きかったら次へ
@@ -1700,6 +1973,8 @@ sw_sweep_delay_table:
 		sta SSwpCur_L, x
 		lda SSwpEnd_H, x
 		sta SSwpCur_H, x
+		lda SSwpEnd_X, x
+		sta SSwpCur_X, x
 		lda #1
 		sta SSwpCtr, x
 		jmp get
@@ -1715,6 +1990,9 @@ sw_sweep_delay_table:
 		lda SSwpCur_H, x
 		adc Freq_H, x
 		sta Freq_H, x
+		lda SSwpCur_X, x
+		adc Freq_X, x
+		sta Freq_X, x
 		rts
 .endproc
 
@@ -1898,6 +2176,8 @@ sw_sweep_delay_table:
 		sta Freq_L, x
 		bcc frame
 		inc Freq_H, x
+		bne frame
+		inc Freq_X, x
 		jmp frame
 	neg:
 		clc
@@ -1905,6 +2185,10 @@ sw_sweep_delay_table:
 		sta Freq_L, x
 		bcs frame
 		dec Freq_H, x
+		lda Freq_H, x
+		cmp #$ff
+		bne frame
+		dec Freq_X, x
 	frame:
 		lda FEnvCtr, x
 		cmp #2
@@ -2330,6 +2614,35 @@ sw_sweep_delay_table:
 	ss5b_end:
 .endif
 
+.ifdef N163
+	n163_ch:
+		ldx #DEV_N163_CH1
+		lda #DEV_N163_CH1
+		clc
+		adc N163ChCount
+		sta Work + 7
+	@L:
+		stx Work + 6
+		lda ActTbl, x
+		cmp #$ff
+		beq @next
+		tax
+		lda Work + 6
+		sec
+		sbc #DEV_N163_CH1
+		clc
+		adc N163ChOffset
+		tay
+		jsr write_n163
+		jsr writereg_end
+		ldx Work + 6
+	@next:
+		inx
+		cpx Work + 7
+		bcc @L
+	n163_end:
+.endif
+
 .ifdef FDS
 	fds:
 		ldx #DEV_FDS
@@ -2548,6 +2861,144 @@ sw_sweep_delay_table:
 		lda NoteN, x
 		sta $e000
 	end:
+		rts
+.endproc
+.endif
+
+;N163
+.ifdef N163
+.proc n163_mute_channels
+		lda #$47
+		sta Work
+		ldy #7
+		lda #0
+	@L:
+		lda Work
+		ora #$80
+		sta $f800
+		lda #0
+		sta $4800
+		lda Work
+		clc
+		adc #8
+		sta Work
+		dey
+		bne @L
+		lda #$ff
+		sta $f800
+		lda N163ChReg
+		sta $4800
+		rts
+.endproc
+
+.proc n163_update_freq
+		ldx #LAST_TRACK
+	@L:
+		lda Frags, x
+		and #FRAG_END
+		bne @N
+		lda Device, x
+		cmp #DEV_N163_CH1
+		bcc @N
+		cmp #DEV_N163_CH8 + 1
+		bcs @N
+		lda NoteN, x
+		jsr calcfreq
+		lda Work + 2
+		sta Freq_L, x
+		sta RefFreq_L, x
+		lda Work + 3
+		sta Freq_H, x
+		sta RefFreq_H, x
+		lda Work + 4
+		sta Freq_X, x
+		sta RefFreq_X, x
+	@N:
+		dex
+		bpl @L
+		ldx ProcTr
+		rts
+.endproc
+
+.proc n163_load_wave
+		lda #$80
+		sta $f800
+		lda N163WavAddr_L
+		sta Work
+		lda N163WavAddr_H
+		sta Work + 1
+		ldy #0
+	@L:
+		lda (Work), y
+		sta $4800
+		iny
+		cpy #64
+		bcc @L
+		lda #$c0
+		sta $f800
+		lda #0
+		ldy #64
+	@C:
+		sta $4800
+		dey
+		bne @C
+		lda #$ff
+		sta $f800
+		lda N163ChReg
+		sta $4800
+		rts
+.endproc
+
+.proc write_n163
+		tya
+		asl
+		asl
+		asl
+		clc
+		adc #$40
+		sta Work
+		ora #$80
+		sta $f800
+		lda Freq_L, x
+		sta $4800
+		lda Work
+		clc
+		adc #2
+		ora #$80
+		sta $f800
+		lda Freq_H, x
+		sta $4800
+		lda Work
+		clc
+		adc #4
+		ora #$80
+		sta $f800
+		lda Freq_X, x
+		and #$03
+		ora N163WaveLenReg, x
+		sta $4800
+		lda Work
+		clc
+		adc #6
+		ora #$80
+		sta $f800
+		lda N163WaveOffset, x
+		bpl @addr
+		lda Tone, x
+		and #$0f
+		asl
+		asl
+		asl
+		asl
+		asl
+	@addr:
+		sta $4800
+		lda Volume, x
+		cpy #7
+		bne @vol
+		ora N163ChReg
+	@vol:
+		sta $4800
 		rts
 .endproc
 .endif
@@ -2857,6 +3308,35 @@ Freq_5B:
 	.word	$0fdf
 	.word	$0efc
 	.word	$0e24
+.endif
+
+.ifdef N163
+Freq_N163:
+	.byte	$66, $1f, $01
+	.byte	$7d, $30, $01
+	.byte	$98, $42, $01
+	.byte	$c7, $55, $01
+	.byte	$19, $6a, $01
+	.byte	$a1, $7f, $01
+	.byte	$71, $96, $01
+	.byte	$9c, $ae, $01
+	.byte	$37, $c8, $01
+	.byte	$5a, $e3, $01
+	.byte	$16, $00, $02
+	.byte	$89, $1e, $02
+Freq_N163_6:
+	.byte	$61, $bc, $06
+	.byte	$ec, $22, $07
+	.byte	$8e, $8f, $07
+	.byte	$a7, $02, $08
+	.byte	$97, $7c, $08
+	.byte	$c7, $fd, $08
+	.byte	$a6, $86, $09
+	.byte	$a8, $17, $0a
+	.byte	$4a, $b1, $0a
+	.byte	$19, $54, $0b
+	.byte	$81, $00, $0c
+	.byte	$35, $b7, $0c
 .endif
 
 .ifdef FDS

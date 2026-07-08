@@ -41,8 +41,9 @@
 #define REST_LENGTH			0xec
 #define INF_LOOP			0xed
 #define DEF_LENGTH			0xee
-#define VOLUME_REL			0xef
-#define VOLUME_ABS			0xf0
+#define VOLUME				0xef
+#define VOLUME_REL			VOLUME
+#define VOLUME_ABS			VOLUME
 #define DETUNE				0xf1
 #define HW_SWEEP			0xf2
 #define HW_ENV				0xf3
@@ -54,6 +55,8 @@
 #define FDS_MOD_FREQ		0xf9
 #define FDS_MOD_TONE		0xfa
 #define FDS_MOD_ENV			0xfb
+#define N163_CH_COUNT		0xfc
+#define N163_WAVE_SETUP		0xfd
 
 #define DEV_2A03_SQR1		0
 #define DEV_2A03_SQR2		1
@@ -69,6 +72,14 @@
 #define DEV_SS5B_SQR2		11
 #define DEV_SS5B_SQR3		12
 #define DEV_FDS				13
+#define DEV_N163_CH1		14
+#define DEV_N163_CH2		15
+#define DEV_N163_CH3		16
+#define DEV_N163_CH4		17
+#define DEV_N163_CH5		18
+#define DEV_N163_CH6		19
+#define DEV_N163_CH7		20
+#define DEV_N163_CH8		21
 
 enum Expdev
 {
@@ -98,6 +109,9 @@ private:
 	int deflen;
 	int timebase;
 	int totalpos;
+	std::vector<unsigned char> n163WaveOffsets;
+	std::vector<unsigned char> n163WaveLengthRegs;
+	std::vector<unsigned char> n163WaveFreqShifts;
 
 	bool skipUntil(std::string input);
 	bool isDigit(char c);
