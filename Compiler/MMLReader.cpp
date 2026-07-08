@@ -1944,7 +1944,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                     else
                     {
-                        data.push_back(VOLUME_ABS);
+                        data.push_back(VOLUME);
                         data.push_back(pdvol);
                     }
 
@@ -1976,7 +1976,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     if (pdvol > 0)
                     {
                         //ボリュームを戻す
-                        data.push_back(VOLUME_ABS);
+                        data.push_back(VOLUME);
                         data.push_back(volume);
                     }
                 }
@@ -2007,7 +2007,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
 
                 if (pdvol > 0)
                 {
-                    data.push_back(VOLUME_ABS);
+                    data.push_back(VOLUME);
                     data.push_back(pdvol);
                 }
 
@@ -2039,7 +2039,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (pdvol > 0)
                 {
                     //ボリュームを戻す
-                    data.push_back(VOLUME_ABS);
+                    data.push_back(VOLUME);
                     data.push_back(volume);
                 }
             }
@@ -2522,8 +2522,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         n = 15;
                     }
-                    data.push_back(VOLUME_REL);
-                    data.push_back(n);
+                    data.push_back(VOLUME);
+                    data.push_back(0x10 | n);
                     volume += n;
                 }
             }
@@ -2536,7 +2536,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         n = 15;
                     }
-                    data.push_back(VOLUME_REL);
+                    data.push_back(VOLUME);
                     data.push_back(-n);
                     volume -= n;
                 }
@@ -2551,7 +2551,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         n = 15;
                     }
-                    data.push_back(VOLUME_ABS);
+                    data.push_back(VOLUME);
                     data.push_back(n);
                     volume = n;
                 }

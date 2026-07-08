@@ -143,8 +143,8 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ;ec	:r		休符（音長指定）
 ;ed :L		無限ループ
 ;ee	:lx		デフォ音長
-;ef	:v+-x	ボリューム相対指定（-15～15）
-;f0	:vx		ボリューム絶対指定（0～15）
+;ef	:vx/v+-x	ボリューム指定（絶対0～15、相対-15～15）
+;f0	:		未使用
 ;f1	:@dx	デチューン
 ;f2	:hsx	ハードウェアスイープ
 ;f3	:hex	ハードウェアエンベロープ
@@ -970,9 +970,15 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		jsr addptr
 		rts
 		
-	rel_volume:				;ボリューム相対指定
+	volume:					;ボリューム指定
 		ldy #1
 		lda (Work), y
+		cmp #$10
+		bcc @abs
+		cmp #$20
+		bcs @rel
+		and #$0f
+	@rel:
 		clc
 		adc TrVolume, x
 		bpl @P
@@ -982,10 +988,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #2
 		jsr addptr
 		rts
-		
-	abs_volume:				;ボリューム絶対指定
-		ldy #1
-		lda (Work), y
+	@abs:
 		sta TrVolume, x
 		lda #2
 		jsr addptr
@@ -1232,8 +1235,8 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		.word len_rest - 1
 		.word inf_loop_def - 1
 		.word def_len - 1
-		.word rel_volume - 1
-		.word abs_volume - 1
+		.word volume - 1
+		.word unknown_cmd - 1
 		.word detune - 1
 		.word hw_sweep - 1
 		.word hw_env - 1
