@@ -3,8 +3,8 @@
 
 struct EnvData
 {
-	int num;
-	int addr;
+	int num = 0;
+	int addr = 0;
 	std::vector<char>data;
 };
 

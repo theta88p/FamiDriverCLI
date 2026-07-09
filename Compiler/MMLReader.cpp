@@ -24,7 +24,7 @@ static bool packSoftwareSweep(int start, int end, int delay, int speed, unsigned
     }
 
     int delayIndex = -1;
-    for (int i = 0; i < static_cast<int>(sizeof(sweepdelaytbl)); i++)
+    for (int i = 0, size = static_cast<int>(sizeof(sweepdelaytbl)); i < size; i++)
     {
         if (sweepdelaytbl[i] == delay)
         {
@@ -78,8 +78,7 @@ MMLReader::~MMLReader()
 
 void MMLReader::readMML()
 {
-    char c;
-    int n;
+    int n = 0;
     int music = 0;
     std::map<std::string, std::string, cmpByStringLength> macrolist;
     std::vector<unsigned char> head;
@@ -315,13 +314,13 @@ void MMLReader::readMML()
                 continue;
             }
 
-		std::vector<unsigned char> trhead;
+		    std::vector<unsigned char> trhead;
             std::vector<unsigned char> musdata;
             foundMusic = true;
             applyTimebaseAt(static_cast<int>(ss.tellg()));
             if (findStr("{"))
             {
-                int seek = ss.tellg();
+                int seek = (int)ss.tellg();
                 int curline = linenum;
                 int track = 0;
 
@@ -359,7 +358,7 @@ void MMLReader::readMML()
                 }
 
                 int tone = 0;
-                readBrackets(ss.tellg(), trheadsize, trhead, musdata, tone);
+                readBrackets((int)ss.tellg(), trheadsize, trhead, musdata, tone);
                 trhead.push_back(0xff);             //トラックヘッダ終端
                 trhead.push_back(lengthtbl[3]);     //デフォルトのデフォルト音長（4分音符）
 
@@ -537,7 +536,6 @@ void MMLReader::readDifinitions()
         {
             if (isNextStr("dpcm"))   //DPCMリスト
             {
-                int tb;
                 skipSpace();
                 if (isNextChar('{'))
                 {
@@ -594,7 +592,7 @@ void MMLReader::readDifinitions()
 
                                         for (auto& [num, dpcm] : dpcmlist)
                                         {
-                                            int size = Utils::GetFileSize(dpcm.path);
+                                            int size = (int)Utils::GetFileSize(dpcm.path);
                                             if (size > 0)
                                             {
                                                 dpcm.offset = offset;
@@ -899,7 +897,6 @@ void MMLReader::readDifinitions()
 void MMLReader::readMacro(std::map<std::string, std::string, cmpByStringLength>& macrolist)
 {
     char c;
-    int n;
     bool isTrack = false;
     bool isMusic = false;
 
@@ -1154,7 +1151,7 @@ void MMLReader::readSubRoutine(int& subsize)
                     skipSpace();
                     if (isNextChar('{'))
                     {
-                        int pos = ss.tellg();
+                        int pos = (int)ss.tellg();
                         applyTimebaseAt(pos);
                         std::vector<unsigned char> trhead;
 						std::vector<unsigned char> trbody;
@@ -1268,7 +1265,7 @@ void MMLReader::readEnvelope(int& envsize)
                                     }
                                     else if (c == '|')
                                     {
-                                        ehead.push_back(ebody.size() / 2 + 1);  //ヘッダ自身を含めると+1
+                                        ehead.push_back((int)(ebody.size()) / 2 + 1);  //ヘッダ自身を含めると+1
 
                                         if (ehead.size() > 2)
                                         {
@@ -1282,7 +1279,7 @@ void MMLReader::readEnvelope(int& envsize)
                                         if (ehead.size() == 0)
                                         {
                                             ehead.push_back(0x81);
-                                            ehead.push_back(ebody.size() / 2 + 1);
+                                            ehead.push_back((int)(ebody.size()) / 2 + 1);
                                             ebody.push_back(0); //最後に0を追加にして次のエンベロープに流れないようにする
                                             ebody.push_back(0);
                                         }
@@ -1290,7 +1287,7 @@ void MMLReader::readEnvelope(int& envsize)
                                         {
                                             //ヘッダ1個だったらリリースが省略されたとみなす
                                             ehead[0] |= 0x80;
-                                            ehead.push_back(ebody.size() / 2 + 1);
+                                            ehead.push_back((int)(ebody.size()) / 2 + 1);
                                             ebody.push_back(0); //最後に0を追加にして次のエンベロープに流れないようにする
                                             ebody.push_back(0);
                                         }
@@ -1685,7 +1682,7 @@ void MMLReader::readModData(std::vector<unsigned char>& out)
     for (const auto& [wavnum, data] : moddata)
     {
         int temp = 0;
-        for (int i = 0; i < data.size(); i++)
+        for (int i = 0, size = (int)data.size(); i < size; i++)
         {
             if (i % 2 == 0)   //2バイトごとに1バイトにまとめる
             {
@@ -1796,6 +1793,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     };
 
     ss.seekg(startpos);
+    int note = 0;
 
     while (ss.get(c))
     {
@@ -1841,6 +1839,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
         case 'F':
         case 'G':
             tmp = 0x20;
+            [[fallthrough]];
         case 'a':
         case 'b':
         case 'c':
@@ -1848,7 +1847,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
         case 'e':
         case 'f':
         case 'g':
-            nn = notetbl[c - tmp - 0x61] + octave * 12;
+            note = std::clamp(c - tmp - 0x61, 0, 7);
+            nn = notetbl[note] + octave * 12;
             skipSpace();
             while (getc(c))          //半音
             {
@@ -1939,7 +1939,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     else if (cmd == PLAY_DATA)      //毎回実行するので使用中コマンドには追加しない
                     {
                         bool hasmusic = false;
-                        for (int i = 0; i < musiclist.size(); i++)
+                        for (int i = 0, size = (int)musiclist.size(); i < size; i++)
                         {
                             if (musiclist[i] == args[0])
                             {
@@ -1959,7 +1959,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         data.push_back(cmd);
 
-                        for (int i = 0; i < args.size(); i++)
+                        for (int i = 0, size = (int)args.size(); i < size; i++)
                         {
                             data.push_back(args[i]);
                         }
@@ -2008,7 +2008,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         data.push_back(cmd);
 
-                        for (int i = 0; i < args.size(); i++)
+                        for (int i = 0, size = (int)args.size(); i < size; i++)
                         {
                             data.push_back(args[i]);
                         }
@@ -2066,7 +2066,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 skipSpace();
                 if (usePDelay)
                 {
-                    while (prevnotes.size() > pddist)
+                    while ((int)prevnotes.size() > pddist)
                     {
                         prevnotes.pop();
                     }
@@ -2133,7 +2133,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             skipSpace();
             if (usePDelay)
             {
-                while (prevnotes.size() > pddist)
+                while ((int)prevnotes.size() > pddist)
                 {
                     prevnotes.pop();
                 }
@@ -2542,12 +2542,12 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     if (getMultiDigit(n))
                     {
                         bool hasmusic = false;
-                        for (int i = 0; i < musiclist.size(); i++)
+                        for (const auto& music : musiclist)
                         {
-                            if (musiclist[i] == n)
+                            if (music == n)
                             {
                                 data.push_back(PLAY_DATA);
-                                data.push_back(musiclist[i]);
+                                data.push_back(music);
                                 hasmusic = true;
                             }
                         }
@@ -2658,7 +2658,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             if (getMultiDigit(n))
             {
                 deflen = n;
-                for (int i = 0; i < sizeof(nthnotetbl); i++)
+                for (int i = 0, size = (int)sizeof(nthnotetbl); i < size; i++)
                 {
                     if (deflen == nthnotetbl[i])
                     {
@@ -3334,8 +3334,8 @@ bool MMLReader::skipSpaceUntilNextLine()
 bool MMLReader::findStr(std::string str, std::string exclude)
 {
     char c;
-    int pos = 0;
-    int posex = 0;
+    size_t pos = 0;
+    size_t posex = 0;
 
     while (ss.get(c))
     {
@@ -3390,7 +3390,7 @@ bool MMLReader::findStr(std::string str, std::string exclude)
 bool MMLReader::findStr(std::string str)
 {
     char c;
-    int pos = 0;
+    size_t pos = 0;
     while (ss.get(c))
     {
         if (c == '\n')
@@ -3441,7 +3441,7 @@ bool MMLReader::isNextChar(char input)
 bool MMLReader::isNextStr(std::string str)
 {
     char c;
-    int pos = 0;
+    size_t pos = 0;
     while (ss.get(c))
     {
         if (tolower(c) == tolower(str[pos]))
@@ -3886,7 +3886,8 @@ bool MMLReader::getNoteNumber(int& nn)
     char c;
     int n;
     int tmp = 0;
-    int pos = ss.tellg();
+    int note = 0;
+    int pos = (int)ss.tellg();
 
     getc(c);
 
@@ -3900,6 +3901,7 @@ bool MMLReader::getNoteNumber(int& nn)
     case 'F':
     case 'G':
         tmp = 0x20;
+		[[fallthrough]];
     case 'a':
     case 'b':
     case 'c':
@@ -3907,7 +3909,8 @@ bool MMLReader::getNoteNumber(int& nn)
     case 'e':
     case 'f':
     case 'g':
-        nn = notetbl[c - tmp - 0x61];
+        note = std::clamp(c - tmp - 0x61, 0, 7);
+        nn = notetbl[note];
         break;
     default:
         ss.seekg((int)pos);

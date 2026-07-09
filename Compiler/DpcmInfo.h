@@ -3,9 +3,9 @@
 
 struct DpcmInfo
 {
-	int size;
-	int offset;
-	int init;
+	int size = 0;
+	int offset = 0;
+	int init = 0;
 	std::wstring path;
 };
 

@@ -9,9 +9,9 @@ private:
 	std::string title;
 	std::string artist;
 	std::string copyright;
-	int musicnum;
-	int dpcmoffset;
-	int expdevice;
+	int musicnum = 0;
+	int dpcmoffset = 0;
+	int expdevice = 0;
 	std::map<int, DpcmInfo> dpcmlist;
 	std::vector<unsigned char> seqdata;
 

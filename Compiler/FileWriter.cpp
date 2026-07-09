@@ -235,7 +235,7 @@ void FileWriter::createFds()
     files.push_back({ 2, 0, "FCDSPPRG", prgaddr, 0, prgdata });
     files.push_back({ 3, 0, "FCDSPCHR", chraddr, 1, chrdata });
     const unsigned char lastFileId = files.back().id;
-    const unsigned char visibleFileCount = files.size();
+    const unsigned char visibleFileCount = (unsigned char)files.size();
 
     std::vector<unsigned char> side;
     auto pushByte = [&side](unsigned char value)
@@ -409,8 +409,8 @@ void FileWriter::createNes()
 
     char c;
     int nesheadsize = 0x10;
-    int dpcmaddr = 0x4000 + nesheadsize;
-    int dpcmend = 0x7eb0 + nesheadsize;
+    size_t dpcmaddr = 0x4000 + nesheadsize;
+    size_t dpcmend = 0x7eb0 + nesheadsize;
 
     if (expdevice & Expdev::VRC6)
     {
@@ -487,7 +487,7 @@ void FileWriter::createNes()
     }
 
     c = 0;
-    for (int i = nesheadsize + drvsize + seqdata.size(); i < dpcmaddr; i++)
+    for (size_t i = drvsize + nesheadsize + seqdata.size(); i < dpcmaddr; i++)
     {
         if (ofs)
         {
@@ -537,7 +537,7 @@ void FileWriter::createNes()
     }
 
     c = 0;
-    for (int i = dpcmaddr + dpcmsize; i < dpcmend; i++)
+    for (size_t i = dpcmaddr + dpcmsize; i < dpcmend; i++)
     {
         if (ofs)
         {
@@ -686,7 +686,7 @@ void FileWriter::createNsf()
 
     for (int i = 0; i < 31; i++)
     {
-        if (i < title.length())
+        if (i < (int)title.length())
         {
             nsfhead[i + 0x0e] = title[i];
         }
@@ -698,7 +698,7 @@ void FileWriter::createNsf()
 
     for (int i = 0; i < 31; i++)
     {
-        if (i < artist.length())
+        if (i < (int)artist.length())
         {
             nsfhead[i + 0x2e] = artist[i];
         }
@@ -710,7 +710,7 @@ void FileWriter::createNsf()
 
     for (int i = 0; i < 31; i++)
     {
-        if (i < copyright.length())
+        if (i < (int)copyright.length())
         {
             nsfhead[i + 0x4e] = copyright[i];
         }

@@ -3,8 +3,8 @@
 
 struct TrackData
 {
-	int device;
-	int track;
+	int device = 0;
+	int track = 0;
 	std::vector<unsigned char>data;
 
 	bool operator<(const TrackData& right)

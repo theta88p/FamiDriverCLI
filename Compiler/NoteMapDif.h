@@ -5,13 +5,8 @@ using NoteMapTgt = int;
 
 struct NoteMapDif
 {
-	int number;
+	int number = 0;
 	std::map<NoteMapTgt, NoteMap> maplist;
-
-	NoteMapDif()
-	{
-		int number = 0;
-	}
 
 	NoteMapDif operator=(const NoteMapDif& nmd)
 	{
