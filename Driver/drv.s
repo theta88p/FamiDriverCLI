@@ -8,10 +8,15 @@
 .export		Tone
 .export		Freq_L
 .export		Freq_H
+.export		Freq_X
 .export		ActTbl
 .export		drv_main
 .export		drv_init
 .export		drv_sndreq
+.ifdef N163
+.export		N163ChCount
+.export		N163FreqShift
+.endif
 
 .include	"drv.inc"
 

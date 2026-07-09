@@ -8,8 +8,13 @@
 .import		Tone
 .import		Freq_L
 .import		Freq_H
+.import		Freq_X
 .import		ActTbl
 .import		palette
+.ifdef N163
+.import		N163ChCount
+.import		N163FreqShift
+.endif
 
 .exportzp	CpuCtrL
 .exportzp	CpuCtrH
@@ -29,7 +34,7 @@
 
 .zeropage
 
-DspWork:	.res	4
+DspWork:	.res	10
 DspChannel:	.res	1
 CpuCtrL:	.res	1
 CpuCtrH:	.res	1
@@ -79,7 +84,11 @@ CH3 = CH2 + 20
 CH4 = CH3 + 4
 CH5 = CH4 + 20
 EXP1 = CH5 + 4
+.ifdef N163
+CPU = EXP1 + 48
+.else
 CPU = EXP1 + 28
+.endif
 
 CH1KEY		=	DMA + 0
 CH1VOL1		=	DMA + 4
@@ -106,10 +115,22 @@ CH5KEY		=	DMA + CH5 + 0
 EXP1KEY = DMA + EXP1 + 0
 EXP2KEY = DMA + EXP1 + 4
 EXP3KEY = DMA + EXP1 + 8
+.ifdef N163
+EXP4KEY = DMA + EXP1 + 12
+EXP5KEY = DMA + EXP1 + 16
+EXP6KEY = DMA + EXP1 + 20
+EXP7KEY = DMA + EXP1 + 24
+EXP8KEY = DMA + EXP1 + 28
+EXPVOL1 = DMA + EXP1 + 32
+EXPVOL2 = DMA + EXP1 + 36
+EXPVOL3 = DMA + EXP1 + 40
+EXPVOL4 = DMA + EXP1 + 44
+.else
 EXPVOL1 = DMA + EXP1 + 12
 EXPVOL2 = DMA + EXP1 + 16
 EXPVOL3 = DMA + EXP1 + 20
 EXPVOL4 = DMA + EXP1 + 24
+.endif
 
 CPUREM = DMA + CPU
 
@@ -616,7 +637,7 @@ YPOS_CPU = $bf
 	@keyoff:
 		lda #$ff
 		sta EXP3KEY + 0
-		jmp @sum_volume
+		jmp n163_04
 	@keyon:
 		jsr freq2note_ss5b
 		ldy #5
@@ -661,7 +682,7 @@ YPOS_CPU = $bf
 		sta EXP1KEY + 0
 		jmp n163_02
 	@keyon:
-		jsr note2note_n163
+		jsr freq2note_n163
 		ldy #3
 		jsr draw_note
 		lda Volume, x
@@ -681,7 +702,7 @@ YPOS_CPU = $bf
 		sta EXP2KEY + 0
 		jmp n163_03
 	@keyon:
-		jsr note2note_n163
+		jsr freq2note_n163
 		ldy #4
 		jsr draw_note
 		lda Volume, x
@@ -701,9 +722,9 @@ YPOS_CPU = $bf
 	@keyoff:
 		lda #$ff
 		sta EXP3KEY + 0
-		jmp @sum_volume
+		jmp n163_04
 	@keyon:
-		jsr note2note_n163
+		jsr freq2note_n163
 		ldy #5
 		jsr draw_note
 		lda Volume, x
@@ -711,10 +732,127 @@ YPOS_CPU = $bf
 		adc ExpVolume
 		sta ExpVolume
 
+	;---------------N163 ch4---------------
+	n163_04:
+		ldx #DEV_N163_CH4
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP4KEY + 0
+		jmp n163_05
+	@keyon:
+		jsr freq2note_n163
+		ldy #7
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------N163 ch5---------------
+	n163_05:
+		ldx #DEV_N163_CH5
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP5KEY + 0
+		jmp n163_06
+	@keyon:
+		jsr freq2note_n163
+		ldy #8
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------N163 ch6---------------
+	n163_06:
+		ldx #DEV_N163_CH6
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP6KEY + 0
+		jmp n163_07
+	@keyon:
+		jsr freq2note_n163
+		ldy #9
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------N163 ch7---------------
+	n163_07:
+		ldx #DEV_N163_CH7
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP7KEY + 0
+		jmp n163_08
+	@keyon:
+		jsr freq2note_n163
+		ldy #10
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------N163 ch8---------------
+	n163_08:
+		ldx #DEV_N163_CH8
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP8KEY + 0
+		jmp n163_sum_volume
+	@keyon:
+		jsr freq2note_n163
+		ldy #11
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
 	;---------------N163 Volume---------------
-	@sum_volume:
+	n163_sum_volume:
 		lda ExpVolume
+		ldy N163ChCount
+		cpy #4
+		bcc @write_volume
 		lsr
+		cpy #7
+		bcc @write_volume
+		lsr
+	@write_volume:
 		clc
 		adc #$b8
 		sta EXPVOL1 + 3
@@ -984,14 +1122,16 @@ YPOS_CPU = $bf
 .endproc
 
 note_oam_offset:
-	.byte	CH1, CH2, CH3, EXP1, EXP1 + 4, EXP1 + 8, EXP1 + 8
+	.byte	CH1, CH2, CH3, EXP1, EXP1 + 4, EXP1 + 8, EXP1 + 8, EXP1 + 12
+	.byte	EXP1 + 16, EXP1 + 20, EXP1 + 24, EXP1 + 28
 note_y:
 	.byte	YPOS1 + 8, YPOS2 + 8, YPOS3 + 8
 	.byte	YPOS_EXP + 8, YPOS_EXP + 8, YPOS_EXP + 8, YPOS_EXP + 8
+	.byte	YPOS_EXP + 8, YPOS_EXP + 8, YPOS_EXP + 8, YPOS_EXP + 8, YPOS_EXP + 8
 note_octave_shift:
-	.byte	0, 0, 1, 0, 0, 0, 0
+	.byte	0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0
 note_palette:
-	.byte	0, 0, 0, 0, 0, 0, 1
+	.byte	0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0
 
 
 .proc dsp_write
@@ -1823,6 +1963,11 @@ note_palette:
 		sta EXP1KEY + 0
 		sta EXP2KEY + 0
 		sta EXP3KEY + 0
+		sta EXP4KEY + 0
+		sta EXP5KEY + 0
+		sta EXP6KEY + 0
+		sta EXP7KEY + 0
+		sta EXP8KEY + 0
 		lda #YPOS_EXP
 		sta EXPVOL1 + 0
 		sta EXPVOL2 + 0
@@ -2193,19 +2338,193 @@ note_palette:
 .endif
 
 .ifdef N163
-.proc note2note_n163
-		ldy #0
-		lda NoteN, x
-	@L:
-		cmp #12
-		bcc @end
+.proc freq2note_n163
+		lda Freq_L, x
+		ora Freq_H, x
+		ora Freq_X, x
+		bne @start
+		rts
+
+	@start:
+		lda Freq_L, x
+		sta DspWork
+		lda Freq_H, x
+		sta DspWork + 1
+		lda Freq_X, x
+		sta DspWork + 2
+
+		lda N163ChCount
+		cmp #2
+		beq @ch2
+		cmp #3
+		beq @ch3
+		cmp #4
+		beq @ch4
+		cmp #5
+		beq @ch5
+		cmp #6
+		beq @ch6
+		cmp #7
+		beq @ch7
+		cmp #8
+		beq @ch8
+
+	@ch1:
+		jsr @set_table_1
+		lda #8
+		jmp @set_octave
+	@ch2:
+		jsr @set_table_1
+		lda #7
+		jmp @set_octave
+	@ch3:
+		jsr @set_table_6
+		lda #9
+		jmp @set_octave
+	@ch4:
+		jsr @set_table_1
+		lda #6
+		jmp @set_octave
+	@ch5:
+		jsr @set_table_5
+		lda #8
+		jmp @set_octave
+	@ch6:
+		jsr @set_table_6
+		lda #8
+		jmp @set_octave
+	@ch7:
+		jsr @set_table_7
+		lda #8
+		jmp @set_octave
+	@ch8:
+		jsr @set_table_1
+		lda #5
+
+	@set_octave:
 		sec
-		sbc #12
-		iny
-		jmp @L
-	@end:
+		sbc N163FreqShift, x
+		sta DspWork + 4
+
+	@normalize_low:
+		ldy #0
+		jsr cmp_n163_freq_base
+		bcs @normalize_high
+		asl DspWork
+		rol DspWork + 1
+		rol DspWork + 2
+		dec DspWork + 4
+		jmp @normalize_low
+
+	@normalize_high:
+		ldy #36
+		jsr cmp_n163_freq_base
+		bcc @find_note
+		lsr DspWork + 2
+		ror DspWork + 1
+		ror DspWork
+		inc DspWork + 4
+		jmp @normalize_high
+
+	@find_note:
+		lda #0
 		sta DspWork + 3
-		sty DspWork + 2
+		ldy #0
+	@note_loop:
+		jsr cmp_n163_freq_threshold
+		bcc @done
+		inc DspWork + 3
+		tya
+		clc
+		adc #3
+		tay
+		cpy #36
+		bcc @note_loop
+		lda #0
+		sta DspWork + 3
+		inc DspWork + 4
+	@done:
+		lda DspWork + 4
+		sta DspWork + 2
+		rts
+
+	@set_table_1:
+		lda #<Freq_N163_Dsp_1
+		sta DspWork + 5
+		lda #>Freq_N163_Dsp_1
+		sta DspWork + 6
+		lda #<Freq_N163_Mid_1
+		sta DspWork + 7
+		lda #>Freq_N163_Mid_1
+		sta DspWork + 8
+		rts
+	@set_table_5:
+		lda #<Freq_N163_Dsp_5
+		sta DspWork + 5
+		lda #>Freq_N163_Dsp_5
+		sta DspWork + 6
+		lda #<Freq_N163_Mid_5
+		sta DspWork + 7
+		lda #>Freq_N163_Mid_5
+		sta DspWork + 8
+		rts
+	@set_table_6:
+		lda #<Freq_N163_Dsp_6
+		sta DspWork + 5
+		lda #>Freq_N163_Dsp_6
+		sta DspWork + 6
+		lda #<Freq_N163_Mid_6
+		sta DspWork + 7
+		lda #>Freq_N163_Mid_6
+		sta DspWork + 8
+		rts
+	@set_table_7:
+		lda #<Freq_N163_Dsp_7
+		sta DspWork + 5
+		lda #>Freq_N163_Dsp_7
+		sta DspWork + 6
+		lda #<Freq_N163_Mid_7
+		sta DspWork + 7
+		lda #>Freq_N163_Mid_7
+		sta DspWork + 8
+		rts
+.endproc
+
+.proc cmp_n163_freq_base
+		sty DspWork + 9
+		iny
+		iny
+		lda DspWork + 2
+		cmp (DspWork + 5), y
+		bne @end
+		dey
+		lda DspWork + 1
+		cmp (DspWork + 5), y
+		bne @end
+		dey
+		lda DspWork
+		cmp (DspWork + 5), y
+	@end:
+		ldy DspWork + 9
+		rts
+.endproc
+
+.proc cmp_n163_freq_threshold
+		sty DspWork + 9
+		iny
+		iny
+		lda DspWork + 2
+		cmp (DspWork + 7), y
+		bne @end
+		dey
+		lda DspWork + 1
+		cmp (DspWork + 7), y
+		bne @end
+		dey
+		lda DspWork
+		cmp (DspWork + 7), y
+	@end:
+		ldy DspWork + 9
 		rts
 .endproc
 .endif
@@ -2250,4 +2569,50 @@ Freq_Note_Fds:
 	.byte	$00, $00, $01, $01, $02, $02, $02, $03, $03, $03, $04, $04, $04, $05, $05, $05
 	.byte	$06, $06, $06, $07, $07, $07, $07, $08, $08, $08, $09, $09, $09, $09, $0a, $0a
 	.byte	$0a, $0a, $0b, $0b
+.endif
+
+.ifdef N163
+Freq_N163_Dsp_1:
+	.byte	$66, $1f, $01, $7d, $30, $01, $98, $42, $01, $c7, $55, $01
+	.byte	$19, $6a, $01, $a1, $7f, $01, $71, $96, $01, $9c, $ae, $01
+	.byte	$37, $c8, $01, $5a, $e3, $01, $16, $00, $02, $89, $1e, $02
+	.byte	$cc, $3e, $02
+
+Freq_N163_Dsp_5:
+	.byte	$fb, $9c, $05, $6f, $f2, $05, $f6, $4c, $06, $e0, $ac, $06
+	.byte	$7e, $12, $07, $26, $7e, $07, $35, $f0, $07, $0c, $69, $08
+	.byte	$13, $e9, $08, $bf, $70, $09, $6b, $00, $0a, $ac, $98, $0a
+	.byte	$f6, $39, $0b
+
+Freq_N163_Dsp_6:
+	.byte	$61, $bc, $06, $ec, $22, $07, $8e, $8f, $07, $a7, $02, $08
+	.byte	$97, $7c, $08, $c7, $fd, $08, $a6, $86, $09, $a8, $17, $0a
+	.byte	$4a, $b1, $0a, $19, $54, $0b, $81, $00, $0c, $35, $b7, $0c
+	.byte	$c2, $78, $0d
+
+Freq_N163_Dsp_7:
+	.byte	$c7, $db, $07, $69, $53, $08, $26, $d2, $08, $6e, $58, $09
+	.byte	$b0, $e6, $09, $68, $7d, $0a, $17, $1d, $0b, $44, $c6, $0b
+	.byte	$81, $79, $0c, $73, $37, $0d, $97, $00, $0e, $be, $d5, $0e
+	.byte	$8e, $b7, $0f
+
+Freq_N163_Mid_1:
+	.byte	$f1, $27, $01, $8a, $39, $01, $2f, $4c, $01, $f0, $5f, $01
+	.byte	$dd, $74, $01, $09, $8b, $01, $86, $a2, $01, $69, $bb, $01
+	.byte	$c8, $d5, $01, $b8, $f1, $01, $4f, $0f, $02, $aa, $2e, $02
+
+Freq_N163_Mid_5:
+	.byte	$b5, $c7, $05, $b2, $1f, $06, $eb, $7c, $06, $af, $df, $06
+	.byte	$52, $48, $07, $2d, $b7, $07, $a0, $2c, $08, $0f, $a9, $08
+	.byte	$e9, $2c, $09, $95, $b8, $09, $8b, $4c, $0a, $51, $e9, $0a
+
+Freq_N163_Mid_6:
+	.byte	$a6, $ef, $06, $3d, $59, $07, $1a, $c9, $07, $9f, $3f, $08
+	.byte	$2f, $bd, $08, $36, $42, $09, $27, $cf, $09, $79, $64, $0a
+	.byte	$b1, $02, $0b, $4d, $aa, $0b, $db, $5b, $0c, $fb, $17, $0d
+
+Freq_N163_Mid_7:
+	.byte	$98, $17, $08, $c7, $92, $08, $4a, $15, $09, $8f, $9f, $09
+	.byte	$0c, $32, $0a, $3f, $cd, $0a, $ad, $71, $0b, $e2, $1f, $0c
+	.byte	$7a, $d8, $0c, $05, $9c, $0d, $2a, $6b, $0e, $a6, $46, $0f
 .endif
