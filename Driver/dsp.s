@@ -1461,11 +1461,11 @@ note_palette:
 .endif
 
 .ifdef N163
-		lda #$31
+		lda #$73
 		sta $2007
-		lda #$36
+		lda #$74
 		sta $2007
-		lda #$33
+		lda #$75
 		sta $2007
 		lda #$21
 		sta $2006
