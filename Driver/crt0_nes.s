@@ -87,6 +87,37 @@ start:
 	sta $a000
 .endif
 
+.ifdef N163
+	lda #$00
+	sta $8000
+	lda #$01
+	sta $8800
+	lda #$02
+	sta $9000
+	lda #$03
+	sta $9800
+	lda #$04
+	sta $a000
+	lda #$05
+	sta $a800
+	lda #$06
+	sta $b000
+	lda #$07
+	sta $b800
+	lda #$e0
+	sta $c000
+	sta $d000
+	lda #$e1
+	sta $c800
+	sta $d800
+	lda #$00
+	sta $e000
+	lda #$01
+	sta $e800
+	lda #$02
+	sta $f000
+.endif
+
 .ifdef FDS
 lda #$22	;ミラーリング設定
 sta $4025

@@ -646,6 +646,91 @@ YPOS_CPU = $bf
 		sta ExpVolume
 .endif
 
+.ifdef N163
+	;---------------N163 ch1---------------
+	n163_01:
+		ldx #DEV_N163_CH1
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP1KEY + 0
+		jmp n163_02
+	@keyon:
+		jsr note2note_n163
+		ldy #3
+		jsr draw_note
+		lda Volume, x
+		sta ExpVolume
+
+	;---------------N163 ch2---------------
+	n163_02:
+		ldx #DEV_N163_CH2
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP2KEY + 0
+		jmp n163_03
+	@keyon:
+		jsr note2note_n163
+		ldy #4
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------N163 ch3---------------
+	n163_03:
+		ldx #DEV_N163_CH3
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @keyoff
+		lda Volume, x
+		bne @keyon
+	@keyoff:
+		lda #$ff
+		sta EXP3KEY + 0
+		jmp @sum_volume
+	@keyon:
+		jsr note2note_n163
+		ldy #5
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+
+	;---------------N163 Volume---------------
+	@sum_volume:
+		lda ExpVolume
+		lsr
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3
+		clc
+		adc #8
+		sta EXPVOL2 + 3
+		clc
+		adc #8
+		sta EXPVOL3 + 3
+		clc
+		adc #8
+		sta EXPVOL4 + 3
+		lda #0
+		sta ExpVolume
+.endif
+
 .ifdef FDS
 	;---------------FDS---------------
 		ldx #DEV_FDS
@@ -1375,6 +1460,26 @@ note_palette:
 		sta $2007
 .endif
 
+.ifdef N163
+		lda #$31
+		sta $2007
+		lda #$36
+		sta $2007
+		lda #$33
+		sta $2007
+		lda #$21
+		sta $2006
+		lda #$f6
+		sta $2006
+		lda #$28
+		sta $2007
+		lda #$29
+		sta $2007
+		sta $2007
+		sta $2007
+		sta $2007
+.endif
+
 		lda #$22
 		sta $2006
 		lda #$06
@@ -1693,6 +1798,31 @@ note_palette:
 		sta PExpOctave
 		sta PExpNote
 		sta PExpSharp
+		lda #YPOS_EXP
+		sta EXPVOL1 + 0
+		sta EXPVOL2 + 0
+		sta EXPVOL3 + 0
+		sta EXPVOL4 + 0
+		lda #$02
+		sta EXPVOL1 + 1
+		sta EXPVOL2 + 1
+		sta EXPVOL3 + 1
+		sta EXPVOL4 + 1
+		lda #$b8
+		sta EXPVOL1 + 3
+		lda #$c0
+		sta EXPVOL2 + 3
+		lda #$c8
+		sta EXPVOL3 + 3
+		lda #$d0
+		sta EXPVOL4 + 3
+.endif
+
+.ifdef N163
+		lda #$ff
+		sta EXP1KEY + 0
+		sta EXP2KEY + 0
+		sta EXP3KEY + 0
 		lda #YPOS_EXP
 		sta EXPVOL1 + 0
 		sta EXPVOL2 + 0
@@ -2058,6 +2188,24 @@ note_palette:
 		tay
 		lda Freq_Note_Fds, y
 		sta DspWork + 3
+		rts
+.endproc
+.endif
+
+.ifdef N163
+.proc note2note_n163
+		ldy #0
+		lda NoteN, x
+	@L:
+		cmp #12
+		bcc @end
+		sec
+		sbc #12
+		iny
+		jmp @L
+	@end:
+		sta DspWork + 3
+		sty DspWork + 2
 		rts
 .endproc
 .endif

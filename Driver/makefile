@@ -52,6 +52,7 @@ LD_DSP_FLAGS = -C $(CFG_DSP_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgf
 LD_DSP_VRC6_FLAGS = -C $(CFG_DSP_VRC6_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 LD_DSP_MMC5_FLAGS = -C $(CFG_DSP_MMC5_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 LD_DSP_SS5B_FLAGS = -C $(CFG_DSP_SS5B_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
+LD_DSP_N163_FLAGS = -C $(CFG_DSP_N163_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 LD_DSP_FDS_FLAGS = -C $(CFG_DSP_FDS_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 
 #---------------
@@ -100,6 +101,14 @@ CP      = copy
 drv_n163.o : drv.s $(INC_FILES)
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
 	$(AS) drv.s $(ASFLAGS) -D N163=1 -o drv_n163.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_n163.o : dsp.s $(INC_FILES)
+	@echo [Assemble] : dsp.s >>$(ERRLOG_FILE)
+	$(AS) dsp.s $(ASFLAGS) -D N163=1 -o dsp_n163.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+crt0_nes_n163.o : crt0_nes.s $(INC_FILES)
+	@echo [Assemble] : crt0_nes.s >>$(ERRLOG_FILE)
+	$(AS) crt0_nes.s $(ASFLAGS) -D N163=1 -o crt0_nes_n163.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 dsp_ss5b.o : dsp.s $(INC_FILES)
 	@echo [Assemble] : dsp.s >>$(ERRLOG_FILE)
@@ -187,6 +196,7 @@ CFG_DSP_FILE   =	nes.cfg
 CFG_DSP_VRC6_FILE   =	nes_vrc6.cfg
 CFG_DSP_MMC5_FILE   =	nes_mmc5.cfg
 CFG_DSP_SS5B_FILE   =	nes_ss5b.cfg
+CFG_DSP_N163_FILE   =	nes_n163.cfg
 CFG_DSP_FDS_FILE   =	fds.cfg
 
 endif
@@ -251,6 +261,15 @@ MAIN_DSP_SS5B_FILES =	ines_ss5b.o	\
 				drv_ss5b.o		\
 				$(DSP_DATA_FILE)	\
 				dsp_ss5b.o		\
+
+MAIN_DSP_N163_FILES =	ines_n163.o	\
+				crt0_nes_n163.o	\
+				nmi_main_nes.o	\
+				irq_main.o		\
+				main_nes.o		\
+				drv_n163.o		\
+				$(DSP_DATA_FILE)	\
+				dsp_n163.o		\
 
 MAIN_DSP_FDS_FILES = crt0_nes_fds.o	\
 				nmi_main_nes.o	\
@@ -321,7 +340,7 @@ endif
 
 else
 
-all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_ss5b.bin drv_n163.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_mmc5 dsp_ss5b dsp_fds
+all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_ss5b.bin drv_n163.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_mmc5 dsp_ss5b dsp_n163 dsp_fds
 
 drv.bin : drv.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
@@ -366,6 +385,10 @@ dsp_mmc5 : $(MAIN_DSP_MMC5_FILES) $(CHR_FILES)
 dsp_ss5b : $(MAIN_DSP_SS5B_FILES) $(CHR_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_DSP_SS5B_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_n163 : $(MAIN_DSP_N163_FILES) $(CHR_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_N163_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 dsp_fds : $(MAIN_DSP_FDS_FILES) $(CHR_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)

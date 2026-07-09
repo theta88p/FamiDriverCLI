@@ -374,8 +374,8 @@ void FileWriter::createNes()
     }
     else if (expdevice & Expdev::N163)
     {
-        std::cerr << "N163 is not supported by NES file output yet." << std::endl;
-        exit(1);
+        drv += L"bin\\dsp_n163_code.bin";
+        data += L"bin\\dsp_n163_data.bin";
     }
     else if (expdevice & Expdev::SS5B)
     {
@@ -429,6 +429,12 @@ void FileWriter::createNes()
         neshead[0x04] = 0x02; //PRG16K x2
         neshead[0x06] = 0x51; //Sunsoft FME-7 / 5B
 		neshead[0x07] = 0x40;
+    }
+    else if (expdevice & Expdev::N163)
+    {
+        neshead[0x04] = 0x02; //PRG16K x2
+        neshead[0x06] = 0x31; //N163
+		neshead[0x07] = 0x10;
     }
 
     if (nesheadsize + drvsize + seqdata.size() > dpcmaddr + dpcmoffset)
