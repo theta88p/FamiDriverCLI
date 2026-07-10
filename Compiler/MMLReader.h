@@ -130,7 +130,7 @@ private:
 	bool getMultiHex(int& d);
 	bool getStrInQuote(std::string& str);
 	bool getByte(int& h);
-	void calcLength(char cmd, std::vector<unsigned char>& data, std::vector<unsigned char> tbl, int& grace, int shorten);
+	void calcLength(char cmd, std::vector<unsigned char>& data, std::vector<unsigned char> tbl, int& grace, int shorten, bool preserveDefaultRest = false);
 	void pushEnvAssign(std::vector<unsigned char>& data, std::map<int, EnvData>& envdatalist, int envtype, int envnum, int delay, bool ismap, int offset);
 	void getAndPushEnvAssign(std::vector<unsigned char>& data, std::map<int, EnvData>& envdatalist, int envtype, int offset);
 	void makeLengthTbl(std::vector<unsigned char> &tbl);

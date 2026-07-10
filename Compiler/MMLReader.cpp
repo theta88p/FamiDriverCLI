@@ -1700,6 +1700,17 @@ void MMLReader::readModData(std::vector<unsigned char>& out)
 
 void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone)
 {
+    struct DefLenGuard
+    {
+        int& target;
+        int value;
+
+        ~DefLenGuard()
+        {
+            target = value;
+        }
+    } defLenGuard{ deflen, deflen };
+
     char c;
     int n;
     int volume = 15;
@@ -1726,6 +1737,9 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     TrackData tr;
     std::queue<unsigned char> prevnotes;
 	std::vector<unsigned char> data;
+
+    bool preserveDefaultRest = trheadsize == 0;
+    deflen = 4;
 
     auto setFdsDefaults = [&]()
     {
@@ -2027,7 +2041,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (map.commands.count(REST_DEFLEN))   //休符コマンドが入っていた場合
                 {
                     skipSpace();
-                    calcLength(REST_DEFLEN, data, lengthtbl, grace, 0);
+                    calcLength(REST_DEFLEN, data, lengthtbl, grace, 0, preserveDefaultRest);
                 }
                 else
                 {
@@ -2138,7 +2152,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     prevnotes.pop();
                 }
 
-                calcLength(REST_DEFLEN, data, lengthtbl, grace, pdlen);
+                calcLength(REST_DEFLEN, data, lengthtbl, grace, pdlen, preserveDefaultRest);
 
                 if (pdvol > 0)
                 {
@@ -2180,7 +2194,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             }
             else
             {
-                calcLength(REST_DEFLEN, data, lengthtbl, grace, 0);
+                calcLength(REST_DEFLEN, data, lengthtbl, grace, 0, preserveDefaultRest);
             }
             prevnotes.push(REST_DEFLEN);
             break;
@@ -2785,6 +2799,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         tr.data = data;
                         tracks.push_back(tr);
                         data.clear();
+                        deflen = 4;
                         fdsToneSpecified = false;
                         fdsModSpecified = false;
                         n163WaveSetup = -1;
@@ -3626,7 +3641,7 @@ bool MMLReader::getByte(int& res)
 }
 
 
-void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vector<unsigned char> lengthtbl, int& prevGrace, int shorten)
+void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vector<unsigned char> lengthtbl, int& prevGrace, int shorten, bool preserveDefaultRest)
 {
     char c;
     int n = 0;
@@ -3636,12 +3651,82 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
     bool envdis = false;
     bool framelen = false;
     bool grace = false;
+    bool joinedRest = false;
     std::string digit;
+
+    auto nextRestHasExplicitLength = [&]()
+    {
+        std::string src = ss.str();
+        size_t pos = static_cast<size_t>(ss.tellg());
+
+        while (pos < src.size())
+        {
+            char next = src[pos];
+            if (next == ' ' || next == '\t' || next == '\r' || next == '\n')
+            {
+                pos++;
+                continue;
+            }
+
+            if (next == '/' && pos + 1 < src.size() && src[pos + 1] == '/')
+            {
+                pos += 2;
+                while (pos < src.size() && src[pos] != '\n')
+                {
+                    pos++;
+                }
+                continue;
+            }
+
+            if (next == '/' && pos + 1 < src.size() && src[pos + 1] == '*')
+            {
+                pos += 2;
+                while (pos + 1 < src.size() && !(src[pos] == '*' && src[pos + 1] == '/'))
+                {
+                    pos++;
+                }
+                if (pos + 1 < src.size())
+                {
+                    pos += 2;
+                }
+                continue;
+            }
+
+            return isDigit(next) || next == '%' || next == '~';
+        }
+
+        return false;
+    };
 
     while (getc(c))
     {
-        if (c == '^' || (cmd == 0x6c && c == 'r'))      //タイ、もしくは休符が連続で来たとき
+        if (c == '^' || (cmd == REST_DEFLEN && (c == 'r' || c == 'R')))      //タイ、もしくは休符が連続で来たとき
         {
+            bool currentRestIsDefault = frames == 0 && digit.empty() && n == 0 && !dotted && !framelen;
+            if (preserveDefaultRest && cmd == REST_DEFLEN && (c == 'r' || c == 'R') &&
+                (currentRestIsDefault || !nextRestHasExplicitLength()))
+            {
+                if (!currentRestIsDefault)
+                {
+                    if (dotted)
+                    {
+                        frames += n;
+                    }
+                    else if (digit.empty())
+                    {
+                        frames += n;
+                        frames += timebase / deflen;
+                    }
+                    else
+                    {
+                        frames += n;
+                        frames += timebase / std::atoi(digit.c_str());
+                    }
+                }
+                ss.seekg((int)ss.tellg() - 1);
+                break;
+            }
+
             if (dotted)
             {
                 frames += n;
@@ -3660,6 +3745,7 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
             dotted = false;
             digit.clear();
             n = 0;
+            joinedRest = (cmd == REST_DEFLEN && (c == 'r' || c == 'R'));
         }
         else if (c == '.')   //付点
         {
@@ -3719,6 +3805,10 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
                 }
             }
             frames += n;
+            if (joinedRest && digit.empty() && n == 0 && !dotted && !framelen)
+            {
+                frames += timebase / deflen;
+            }
             ss.seekg((int)ss.tellg() - 1);    //読み込み位置を戻す
             break;
         }
