@@ -1,4 +1,4 @@
-;FamiDriverCLI FCDSP v0.5.0
+;FamiDriverCLI FCDSP v0.5.1
 
 .importzp	Frags
 .import		DrvFrags
@@ -637,7 +637,7 @@ YPOS_CPU = $bf
 	@keyoff:
 		lda #$ff
 		sta EXP3KEY + 0
-		jmp n163_04
+		jmp @sum_volume
 	@keyon:
 		jsr freq2note_ss5b
 		ldy #5
