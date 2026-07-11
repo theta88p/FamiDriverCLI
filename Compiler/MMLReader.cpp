@@ -1047,6 +1047,57 @@ void MMLReader::readSubRoutine(int& subsize)
     bool isTrack = false;
     bool isMusic = false;
 
+    auto insertN163WaveSetup = [&](std::vector<unsigned char>& bytes)
+    {
+        if (!(expdevice & Expdev::N163))
+        {
+            return;
+        }
+
+        std::vector<unsigned char> patched;
+        patched.reserve(bytes.size());
+
+        int currentSetup = -1;
+        for (size_t i = 0; i < bytes.size();)
+        {
+            if (bytes[i] == N163_WAVE_SETUP && i + 3 < bytes.size())
+            {
+                currentSetup = bytes[i + 1] | (bytes[i + 2] << 8) | (bytes[i + 3] << 16);
+                patched.insert(patched.end(), bytes.begin() + i, bytes.begin() + i + 4);
+                i += 4;
+                continue;
+            }
+
+            if (bytes[i] == TONE && i + 1 < bytes.size())
+            {
+                int tone = bytes[i + 1];
+                if (tone >= 0 && tone < static_cast<int>(n163WaveOffsets.size()))
+                {
+                    int offset = n163WaveOffsets[tone];
+                    if (n163WaveLengthRegs[tone] == 0xe0 && offset == tone * 32)
+                    {
+                        offset = 0x80;
+                    }
+
+                    int setup = offset | (n163WaveLengthRegs[tone] << 8) | (n163WaveFreqShifts[tone] << 16);
+                    if (setup != currentSetup)
+                    {
+                        patched.push_back(N163_WAVE_SETUP);
+                        patched.push_back(static_cast<unsigned char>(offset));
+                        patched.push_back(n163WaveLengthRegs[tone]);
+                        patched.push_back(n163WaveFreqShifts[tone]);
+                        currentSetup = setup;
+                    }
+                }
+            }
+
+            patched.push_back(bytes[i]);
+            i++;
+        }
+
+        bytes.swap(patched);
+    };
+
     auto applyTimebaseAt = [&](int endpos)
     {
         std::string src = ss.str();
@@ -1154,9 +1205,10 @@ void MMLReader::readSubRoutine(int& subsize)
                         int pos = (int)ss.tellg();
                         applyTimebaseAt(pos);
                         std::vector<unsigned char> trhead;
-						std::vector<unsigned char> trbody;
+                        std::vector<unsigned char> trbody;
                         int tone = 0;
                         readBrackets(pos, 0, trhead, trbody, tone);
+                        insertN163WaveSetup(trbody);
                         SubData sd;
                         sd.num = n;
                         sd.addr = totalpos + subsize;
