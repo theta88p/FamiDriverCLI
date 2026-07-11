@@ -13,6 +13,7 @@
 .export		drv_main
 .export		drv_init
 .export		drv_sndreq
+.export		DrvBankedMode
 .ifdef N163
 .export		N163ChCount
 .export		N163FreqShift
@@ -37,6 +38,7 @@ Work:			.res	10
 Device:			.res	MAX_TRACK	;トラックで使用している音源
 Ptr_L:			.res	MAX_TRACK	;再生箇所のアドレスL
 Ptr_H:			.res	MAX_TRACK	;再生箇所のアドレスH
+TrackBank:		.res	MAX_TRACK	;NSFバンク切り替え用のトラックバンク
 LenCtr:			.res	MAX_TRACK	;音長カウンタ
 GateCtr:		.res	MAX_TRACK	;ゲートカウンター
 NoteN:			.res	MAX_TRACK	;ノートナンバー
@@ -107,6 +109,7 @@ SeqAddr_L:		.res	1	;シーケンス情報のアドレスL
 SeqAddr_H:		.res	1	;シーケンス情報のアドレスH
 PrevDev:		.res	1	;前回の音源（レジスタ書き込み用）
 LastTrack:		.res	1	;使用する最大トラック数 - 1
+DrvBankedMode:	.res	1	;0:従来形式 1:NSFトラックバンク形式
 
 .ifdef SS5B
 SS5BTone:		.res	3
@@ -283,6 +286,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta ProcTr
 		sta SpdFreq
 		sta SpdCtr
+		sta DrvBankedMode
 		lda #$ff				;↓初回必ず実行したいので$ffを書き込んでおく
 		sta PrevDev
 		sta PrevFreq_L
@@ -367,6 +371,12 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda (Work), y
 		adc SeqAddr_H
 		sta Ptr_H, x
+		lda DrvBankedMode
+		beq @bank_done
+		iny
+		lda (Work), y
+		sta TrackBank, x
+	@bank_done:
 		jsr track_init	;トラック初期化
 		inx
 		iny
@@ -466,6 +476,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ; ------------------------------------------------------------------------
 .proc track
 	start:
+		jsr select_track_bank
 		lda Frags, x
 		and #FRAG_END
 		bne next		;終了フラグが立っていなければ処理へ
@@ -1735,6 +1746,7 @@ sw_sweep_delay_table:
 ; ------------------------------------------------------------------------
 .proc envelope
 	start:
+		jsr select_track_bank
 		lda Device, x
 		cmp #$ff
 		beq next			;未使用トラックは処理しない
@@ -1818,6 +1830,19 @@ sw_sweep_delay_table:
 		jmp calc
 	tovol:
 		jmp vol
+.endproc
+
+;NSFのトラック別シーケンスバンクを選択する
+.proc select_track_bank
+		lda DrvBankedMode
+		beq @E
+		lda TrackBank, x
+		sta $5ffa
+		clc
+		adc #1
+		sta $5ffb
+	@E:
+		rts
 .endproc
 
 

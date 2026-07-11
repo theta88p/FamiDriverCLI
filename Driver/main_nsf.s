@@ -6,6 +6,7 @@
 	.import		drv_init
 	.import		drv_sndreq
 	.import		drv_main
+	.import		DrvBankedMode
 	.import		_DPCMinfo
 	.import		_BGM0
 	
@@ -43,6 +44,8 @@ bgm_00:		.addr	_BGM0
 	pha
 	jsr nsf_select_banks
 	jsr drv_init
+	lda #1
+	sta DrvBankedMode
 	
 	pla
 	tay

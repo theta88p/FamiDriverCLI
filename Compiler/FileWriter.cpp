@@ -663,12 +663,6 @@ void FileWriter::createNsf()
         nsfhead[0x70 + i] = i;
     }
 
-    int dpcmbank = 2 + musicnum * 2;
-    nsfhead[0x74] = dpcmbank;
-    nsfhead[0x75] = dpcmbank + 1;
-    nsfhead[0x76] = dpcmbank + 2;
-    nsfhead[0x77] = dpcmbank + 3;
-
     ifs.clear();
     ifs.seekg(0, std::ios::beg);
 
@@ -789,7 +783,15 @@ void FileWriter::createNsf()
         exit(1);
     }
 
-    auto makeMusicBank = [&](int music) -> std::vector<unsigned char>
+    struct MusicBanks
+    {
+        std::vector<unsigned char> first;
+        std::vector<std::vector<unsigned char>> additional;
+    };
+
+    int nextAdditionalBank = 2 + musicnum * 2;
+
+    auto makeMusicBanks = [&](int music) -> MusicBanks
     {
         int oldstart = musicaddr[music];
         int oldend = static_cast<int>(seqdata.size());
@@ -807,46 +809,123 @@ void FileWriter::createNsf()
             exit(1);
         }
 
-        std::vector<unsigned char> bank(musicnum * 2, 0);
-        std::copy(seqdata.begin() + musicnum * 2, seqdata.begin() + commonend, std::back_inserter(bank));
-
-        int newstart = static_cast<int>(bank.size());
-        std::copy(seqdata.begin() + oldstart, seqdata.begin() + oldend, std::back_inserter(bank));
-
-        for (int i = 0; i < musicnum; i++)
+        int pos = oldstart;
+        std::vector<int> trackaddr;
+        while (pos < oldend && seqdata[pos] != 0xff)
         {
-            writeWord(bank, i * 2, newstart);
-        }
-
-        int delta = newstart - oldstart;
-        int pos = newstart;
-        while (pos < static_cast<int>(bank.size()) && bank[pos] != 0xff)
-        {
-            if (pos + 3 >= static_cast<int>(bank.size()))
+            if (pos + 3 >= oldend)
             {
                 std::cerr << "Invalid track header." << std::endl;
                 exit(1);
             }
-
-            int trackaddr = readWord(bank, pos + 2);
-            writeWord(bank, pos + 2, trackaddr + delta);
+            trackaddr.push_back(readWord(seqdata, pos + 2));
             pos += 4;
         }
 
-        if (bank.size() > musicbanksize)
+        if (trackaddr.empty() || pos >= oldend)
         {
-            std::cerr << "Sequence data size has reached maximum." << std::endl;
-            std::cerr << "Seq data : " << bank.size() << " bytes, Max : " << musicbanksize << " bytes" << std::endl;
+            std::cerr << "Invalid track header." << std::endl;
             exit(1);
         }
 
-        bank.resize(musicbanksize, 0);
-        return bank;
+        int oldTrackDataStart = *std::min_element(trackaddr.begin(), trackaddr.end());
+        if (oldTrackDataStart <= pos || oldTrackDataStart > oldend)
+        {
+            std::cerr << "Invalid track address." << std::endl;
+            exit(1);
+        }
+
+        std::vector<int> trackbank;
+        trackbank.push_back(2 + music * 2);
+        for (size_t i = 1; i < trackaddr.size(); i++)
+        {
+            trackbank.push_back(nextAdditionalBank);
+            nextAdditionalBank += 2;
+        }
+
+        const int newstart = commonend;
+        const int newTrackDataStart = newstart + (oldTrackDataStart - oldstart) + static_cast<int>(trackaddr.size());
+        MusicBanks result;
+
+        for (size_t track = 0; track < trackaddr.size(); track++)
+        {
+            int trackend = oldend;
+            for (const auto& addr : trackaddr)
+            {
+                if (addr > trackaddr[track] && addr < trackend)
+                {
+                    trackend = addr;
+                }
+            }
+
+            std::vector<unsigned char> bank(seqdata.begin(), seqdata.begin() + commonend);
+            for (int i = 0; i < musicnum; i++)
+            {
+                writeWord(bank, i * 2, newstart);
+            }
+
+            int headerpos = oldstart;
+            while (seqdata[headerpos] != 0xff)
+            {
+                bank.push_back(seqdata[headerpos]);
+                bank.push_back(seqdata[headerpos + 1]);
+                bank.push_back(newTrackDataStart & 0xff);
+                bank.push_back((newTrackDataStart >> 8) & 0xff);
+                bank.push_back(trackbank[(headerpos - oldstart) / 4]);
+                headerpos += 4;
+            }
+            std::copy(seqdata.begin() + headerpos, seqdata.begin() + oldTrackDataStart, std::back_inserter(bank));
+            std::copy(seqdata.begin() + trackaddr[track], seqdata.begin() + trackend, std::back_inserter(bank));
+
+            if (bank.size() > musicbanksize)
+            {
+                std::cerr << "Sequence data size has reached maximum for a track." << std::endl;
+                std::cerr << "Track data : " << bank.size() << " bytes, Max : " << musicbanksize << " bytes" << std::endl;
+                exit(1);
+            }
+
+            bank.resize(musicbanksize, 0);
+            if (track == 0)
+            {
+                result.first = std::move(bank);
+            }
+            else
+            {
+                result.additional.push_back(std::move(bank));
+            }
+        }
+        return result;
     };
 
+    std::vector<MusicBanks> musicbanks;
     for (int i = 0; i < musicnum; i++)
     {
-        auto bank = makeMusicBank(i);
+        musicbanks.push_back(makeMusicBanks(i));
+    }
+
+    int dpcmbank = nextAdditionalBank;
+    if (dpcmbank + 3 > 0xff)
+    {
+        std::cerr << "NSF bank count has reached maximum." << std::endl;
+        exit(1);
+    }
+    nsfhead[0x74] = dpcmbank;
+    nsfhead[0x75] = dpcmbank + 1;
+    nsfhead[0x76] = dpcmbank + 2;
+    nsfhead[0x77] = dpcmbank + 3;
+
+    auto musicDataPos = ofs.tellp();
+    ofs.seekp(0x74, std::ios::beg);
+    ofs.write(&nsfhead[0x74], 4);
+    ofs.seekp(musicDataPos, std::ios::beg);
+    if (!ofs)
+    {
+        std::cerr << "Faild to update NSF bank header." << std::endl;
+        exit(1);
+    }
+
+    auto writeBank = [&](const std::vector<unsigned char>& bank)
+    {
         for (const auto& s : bank)
         {
             if (ofs)
@@ -858,6 +937,18 @@ void FileWriter::createNsf()
                 std::cerr << "Faild to write file." << std::endl;
                 exit(1);
             }
+        }
+    };
+
+    for (const auto& banks : musicbanks)
+    {
+        writeBank(banks.first);
+    }
+    for (const auto& banks : musicbanks)
+    {
+        for (const auto& bank : banks.additional)
+        {
+            writeBank(bank);
         }
     }
 
