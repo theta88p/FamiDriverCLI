@@ -1,5 +1,4 @@
 #include <iostream>
-#include <atlstr.h>
 #include "MMLReader.h"
 #include "FileWriter.h"
 
@@ -32,9 +31,9 @@ int wmain(int argc, wchar_t* argv[])
     size = ::GetFileVersionInfoSize(fileName, NULL);
     pVersion = new BYTE[size];
     if (::GetFileVersionInfo(fileName, NULL, size, pVersion)) {
-        ::VerQueryValue(pVersion, _T("\\"), (void**)&pFileInfo, &queryLen);
+        ::VerQueryValue(pVersion, L"\\", (void**)&pFileInfo, &queryLen);
 
-        fileVersion = std::format(_T("{0}.{1}.{2}"),
+        fileVersion = std::format(L"{0}.{1}.{2}",
             HIWORD(pFileInfo->dwFileVersionMS),
             LOWORD(pFileInfo->dwFileVersionMS),
             HIWORD(pFileInfo->dwFileVersionLS));
