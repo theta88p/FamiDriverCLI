@@ -126,10 +126,6 @@ void FileWriter::createFds()
     auto vecdata = readFile(vec);
 
     std::vector<unsigned char> dpcmdata;
-    for (int i = 0; i < dpcmoffset; i++)
-    {
-        dpcmdata.push_back(0);
-    }
 
     std::ifstream ifsd;
     int dpcmsize = 0;
@@ -172,14 +168,14 @@ void FileWriter::createFds()
     std::copy(drvdata.begin(), drvdata.end(), std::back_inserter(prgdata));
     std::copy(seqdata.begin(), seqdata.end(), std::back_inserter(prgdata));
 
-    if (prgaddr + prgdata.size() > dpcmaddr)
+    if (prgaddr + prgdata.size() > dpcmaddr + dpcmoffset)
     {
         std::cerr << "Sequence data size has reached maximum." << std::endl;
-        std::cerr << "Seq data : " << seqdata.size() << " bytes, Max : " << dpcmaddr - (prgaddr + drvdata.size()) << " bytes" << std::endl;
+        std::cerr << "Seq data : " << seqdata.size() << " bytes, Max : " << dpcmaddr + dpcmoffset - (prgaddr + drvdata.size()) << " bytes" << std::endl;
         exit(1);
     }
 
-    while (prgaddr + prgdata.size() < dpcmaddr)
+    while (prgaddr + prgdata.size() < dpcmaddr + dpcmoffset)
     {
         prgdata.push_back(0);
     }
@@ -487,7 +483,7 @@ void FileWriter::createNes()
     }
 
     c = 0;
-    for (size_t i = drvsize + nesheadsize + seqdata.size(); i < dpcmaddr; i++)
+    for (size_t i = drvsize + nesheadsize + seqdata.size(); i < dpcmaddr + dpcmoffset; i++)
     {
         if (ofs)
         {
