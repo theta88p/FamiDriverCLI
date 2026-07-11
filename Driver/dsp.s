@@ -142,7 +142,11 @@ YPOS5 = $9f
 YPOS_EXP = $6f
 YPOS_CPU = $bf
 
+.ifdef N163
+.segment "DSPCODE"
+.else
 .code
+.endif
 
 .proc dsp_main
 	start:

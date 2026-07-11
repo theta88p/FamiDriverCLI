@@ -286,6 +286,11 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta ProcTr
 		sta SpdFreq
 		sta SpdCtr
+		.if .defined(MMC3) .or .defined(VRC6) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
+		lda #2
+		.else
+		lda #0
+		.endif
 		sta DrvBankedMode
 		lda #$ff				;↓初回必ず実行したいので$ffを書き込んでおく
 		sta PrevDev
@@ -339,6 +344,26 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta SeqAddr_L
 		stx Work + 1
 		stx SeqAddr_H
+		lda DrvBankedMode
+		cmp #2
+		bne @address_ready
+		lda #0
+		sta Work
+		sta SeqAddr_L
+		.if .defined(VRC6)
+		lda #$80
+		.elseif .defined(MMC3) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
+		lda #$a0
+		.else
+		lda #$c0
+		.endif
+		sta Work + 1
+		sta SeqAddr_H
+		tya
+		clc
+		adc #2
+		jsr select_dsp_bank
+	@address_ready:
 		tya
 		asl
 	load:
@@ -1836,12 +1861,43 @@ sw_sweep_delay_table:
 .proc select_track_bank
 		lda DrvBankedMode
 		beq @E
+		cmp #2
+		beq @dsp
 		lda TrackBank, x
 		sta $5ffa
 		clc
 		adc #1
 		sta $5ffb
+		jmp @E
+	@dsp:
+		lda TrackBank, x
+		jsr select_dsp_bank
 	@E:
+		rts
+.endproc
+
+;拡張音源DSPの$C000-$DFFFへ8KB PRGバンクを選択する
+.proc select_dsp_bank
+.ifdef MMC3
+		pha
+		lda #$07
+		sta $8000
+		pla
+		sta $8001
+.elseif .defined(VRC6)
+		sta $8000
+.elseif .defined(MMC5)
+		ora #$80
+		sta $5115
+.elseif .defined(SS5B)
+		pha
+		lda #$0a
+		sta $8000
+		pla
+		sta $a000
+.elseif .defined(N163)
+		sta $e800
+.endif
 		rts
 .endproc
 

@@ -33,8 +33,8 @@ start:
 	sta $b002
 	lda #$20
 	sta $b003  ; Mirroring: Vertical
-	lda #$02
-	sta $c000  ; CPU $C000-$DFFF = PRG bank 2
+	lda #$1e
+	sta $c000  ; CPU $C000-$DFFF = second-last PRG bank
 	lda #$00
 	sta $d000  ; CHR $0000-$0FFF = identity
 	lda #$01
@@ -54,10 +54,47 @@ start:
 	sta $5114
 	lda #%10000001
 	sta $5115
-	lda #%10000010
+	lda #$fe       ; Map the second-last 8K PRG bank at $C000-$DFFF
 	sta $5116
-	lda #%10000011
+	lda #$ff       ; Map the last 8K PRG bank at $E000-$FFFF
 	sta $5117
+.endif
+
+.ifdef MMC3
+	lda #$06
+	sta $8000
+	lda #$00
+	sta $8001  ; CPU $8000-$9FFF = PRG bank 0
+	lda #$07
+	sta $8000
+	lda #$01
+	sta $8001  ; CPU $A000-$BFFF = PRG bank 1
+
+	lda #$00
+	sta $8000
+	sta $8001  ; CHR $0000-$07FF = banks 0-1
+	lda #$01
+	sta $8000
+	lda #$02
+	sta $8001  ; CHR $0800-$0FFF = banks 2-3
+	lda #$02
+	sta $8000
+	lda #$04
+	sta $8001
+	lda #$03
+	sta $8000
+	lda #$05
+	sta $8001
+	lda #$04
+	sta $8000
+	lda #$06
+	sta $8001
+	lda #$05
+	sta $8000
+	lda #$07
+	sta $8001
+	lda #$00
+	sta $a000  ; Vertical mirroring
 .endif
 
 .ifdef SS5B
@@ -78,8 +115,8 @@ start:
 	lda #$01
 	sta $a000
 	lda #$0b
-	sta $8000  ; CPU $C000-$DFFF = PRG bank 2
-	lda #$02
+	sta $8000  ; Select the $C000-$DFFF PRG bank register
+	lda #$fe    ; Map the second-last 8K PRG bank
 	sta $a000
 	lda #$0c
 	sta $8000  ; Mirroring: vertical
@@ -114,7 +151,7 @@ start:
 	sta $e000
 	lda #$01
 	sta $e800
-	lda #$02
+	lda #$fe
 	sta $f000
 .endif
 

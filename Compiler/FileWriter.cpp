@@ -380,9 +380,9 @@ void FileWriter::createNes()
     }
     else
     {
-        //2A03
-        drv += L"bin\\dsp_code.bin";
-		data += L"bin\\dsp_data.bin";
+        //2A03 with MMC3 banking
+        drv += L"bin\\dsp_mmc3_code.bin";
+		data += L"bin\\dsp_mmc3_data.bin";
     }
 
 
@@ -431,6 +431,351 @@ void FileWriter::createNes()
         neshead[0x04] = 0x02; //PRG16K x2
         neshead[0x06] = 0x31; //N163
 		neshead[0x07] = 0x10;
+    }
+    else
+    {
+        neshead[0x04] = 0x02;
+        neshead[0x06] = 0x41; //MMC3, vertical mirroring
+        neshead[0x07] = 0x00;
+    }
+
+    const bool mmc3Banked = expdevice == 0;
+    const bool bankedDsp = mmc3Banked || (expdevice & (Expdev::VRC6 | Expdev::MMC5 | Expdev::SS5B | Expdev::N163));
+    if (bankedDsp)
+    {
+        const int musicbanksize = 0x2000;
+        const int fixedprgsize = 0x2000;
+        const bool vrc6Banked = expdevice & Expdev::VRC6;
+        const bool n163Banked = expdevice & Expdev::N163;
+        const bool fullDpcmRange = mmc3Banked || (expdevice & (Expdev::MMC5 | Expdev::SS5B));
+        const int fixedDataSize = n163Banked ? fixedprgsize : (mmc3Banked ? 0x15c : 0x150);
+        const int firstMusicBank = vrc6Banked ? 0 : 1;
+        const int fixedcodesize = vrc6Banked ? 0 : musicbanksize;
+
+        if (drvsize > musicbanksize)
+        {
+            std::cerr << "DSP driver size has reached banked-code maximum." << std::endl;
+            std::cerr << "Driver data : " << drvsize << " bytes, Max : " << fixedcodesize << " bytes" << std::endl;
+            exit(1);
+        }
+
+        auto readWord = [](const std::vector<unsigned char>& bytes, int pos)
+        {
+            return static_cast<int>(bytes[pos]) | (static_cast<int>(bytes[pos + 1]) << 8);
+        };
+        auto writeWord = [](std::vector<unsigned char>& bytes, int pos, int value)
+        {
+            bytes[pos] = value & 0xff;
+            bytes[pos + 1] = (value >> 8) & 0xff;
+        };
+
+        if (musicnum < 1 || seqdata.size() < static_cast<size_t>(musicnum * 2))
+        {
+            std::cerr << "Invalid sequence data." << std::endl;
+            exit(1);
+        }
+
+        std::vector<int> musicaddr;
+        for (int i = 0; i < musicnum; i++)
+        {
+            musicaddr.push_back(readWord(seqdata, i * 2));
+        }
+        int commonend = static_cast<int>(seqdata.size());
+        for (const auto& addr : musicaddr)
+        {
+            if (addr < commonend)
+            {
+                commonend = addr;
+            }
+        }
+
+        struct MusicBanks
+        {
+            std::vector<unsigned char> first;
+            std::vector<std::vector<unsigned char>> additional;
+        };
+        int nextAdditionalBank = firstMusicBank + musicnum;
+
+        auto makeMusicBanks = [&](int music) -> MusicBanks
+        {
+            int oldstart = musicaddr[music];
+            int oldend = static_cast<int>(seqdata.size());
+            for (const auto& addr : musicaddr)
+            {
+                if (addr > oldstart && addr < oldend)
+                {
+                    oldend = addr;
+                }
+            }
+            if (oldstart < commonend || oldend > static_cast<int>(seqdata.size()))
+            {
+                std::cerr << "Invalid sequence address." << std::endl;
+                exit(1);
+            }
+
+            int pos = oldstart;
+            std::vector<int> trackaddr;
+            while (pos < oldend && seqdata[pos] != 0xff)
+            {
+                if (pos + 3 >= oldend)
+                {
+                    std::cerr << "Invalid track header." << std::endl;
+                    exit(1);
+                }
+                trackaddr.push_back(readWord(seqdata, pos + 2));
+                pos += 4;
+            }
+            if (trackaddr.empty() || pos >= oldend)
+            {
+                std::cerr << "Invalid track header." << std::endl;
+                exit(1);
+            }
+
+            int oldTrackDataStart = *std::min_element(trackaddr.begin(), trackaddr.end());
+            if (oldTrackDataStart <= pos || oldTrackDataStart > oldend)
+            {
+                std::cerr << "Invalid track address." << std::endl;
+                exit(1);
+            }
+
+            std::vector<int> trackbank{ firstMusicBank + music };
+            for (size_t i = 1; i < trackaddr.size(); i++)
+            {
+                trackbank.push_back(nextAdditionalBank++);
+            }
+
+            const int newstart = commonend;
+            const int newTrackDataStart = newstart + (oldTrackDataStart - oldstart) + static_cast<int>(trackaddr.size());
+            MusicBanks result;
+            for (size_t track = 0; track < trackaddr.size(); track++)
+            {
+                int trackend = oldend;
+                for (const auto& addr : trackaddr)
+                {
+                    if (addr > trackaddr[track] && addr < trackend)
+                    {
+                        trackend = addr;
+                    }
+                }
+
+                std::vector<unsigned char> bank(seqdata.begin(), seqdata.begin() + commonend);
+                for (int i = 0; i < musicnum; i++)
+                {
+                    writeWord(bank, i * 2, newstart);
+                }
+                int headerpos = oldstart;
+                while (seqdata[headerpos] != 0xff)
+                {
+                    bank.push_back(seqdata[headerpos]);
+                    bank.push_back(seqdata[headerpos + 1]);
+                    bank.push_back(newTrackDataStart & 0xff);
+                    bank.push_back((newTrackDataStart >> 8) & 0xff);
+                    bank.push_back(trackbank[(headerpos - oldstart) / 4]);
+                    headerpos += 4;
+                }
+                std::copy(seqdata.begin() + headerpos, seqdata.begin() + oldTrackDataStart, std::back_inserter(bank));
+                std::copy(seqdata.begin() + trackaddr[track], seqdata.begin() + trackend, std::back_inserter(bank));
+                if (bank.size() > musicbanksize)
+                {
+                    std::cerr << "Sequence data size has reached maximum for a track." << std::endl;
+                    std::cerr << "Track data : " << bank.size() << " bytes, Max : " << musicbanksize << " bytes" << std::endl;
+                    exit(1);
+                }
+                bank.resize(musicbanksize, 0);
+                if (track == 0)
+                {
+                    result.first = std::move(bank);
+                }
+                else
+                {
+                    result.additional.push_back(std::move(bank));
+                }
+            }
+            return result;
+        };
+
+        std::vector<MusicBanks> musicbanks;
+        for (int i = 0; i < musicnum; i++)
+        {
+            musicbanks.push_back(makeMusicBanks(i));
+        }
+
+        auto loadDpcmData = [&](int capacity)
+        {
+            std::vector<unsigned char> dpcmdata(capacity, 0);
+            int dpcmpos = dpcmoffset;
+            for (const auto& [n, file] : dpcmlist)
+            {
+                if (dpcmpos + file.size > capacity)
+                {
+                    std::cerr << "DPCM data size has reached maximum." << std::endl;
+                    exit(1);
+                }
+                std::ifstream dpcmifs(std::filesystem::path(file.path), std::ifstream::binary);
+                dpcmifs.read(reinterpret_cast<char*>(dpcmdata.data() + dpcmpos), file.size);
+                if (!dpcmifs)
+                {
+                    std::cerr << "Faild to read DPCM file." << std::endl;
+                    exit(1);
+                }
+                dpcmpos += file.size;
+            }
+            return dpcmdata;
+        };
+
+        auto writeBank = [&](const std::vector<unsigned char>& bank)
+        {
+            ofs.write(reinterpret_cast<const char*>(bank.data()), bank.size());
+        };
+
+        if (vrc6Banked)
+        {
+            const int musicSlotCount = 15;
+            if (nextAdditionalBank > musicSlotCount)
+            {
+                std::cerr << "DSP PRG bank count has reached mapper maximum." << std::endl;
+                exit(1);
+            }
+            neshead[0x04] = 0x10;
+            for (const auto& h : neshead)
+            {
+                ofs.write(&h, sizeof(char));
+            }
+            std::vector<unsigned char> padding(musicbanksize, 0);
+            int writtenSlots = 0;
+            auto writeVrc6Music = [&](const std::vector<unsigned char>& bank)
+            {
+                writeBank(bank);
+                writeBank(padding);
+                writtenSlots++;
+            };
+            for (const auto& banks : musicbanks)
+            {
+                writeVrc6Music(banks.first);
+            }
+            for (const auto& banks : musicbanks)
+            {
+                for (const auto& bank : banks.additional)
+                {
+                    writeVrc6Music(bank);
+                }
+            }
+            while (writtenSlots < musicSlotCount)
+            {
+                writeBank(padding);
+                writeBank(padding);
+                writtenSlots++;
+            }
+            auto dpcmdata = loadDpcmData(musicbanksize);
+            writeBank(dpcmdata);
+
+            std::vector<unsigned char> fixedBank(fixedprgsize, 0);
+            ifs.read(reinterpret_cast<char*>(fixedBank.data()), fixedBank.size());
+            if (ifs.gcount() != fixedBank.size())
+            {
+                std::cerr << "Invalid DSP fixed driver." << std::endl;
+                exit(1);
+            }
+            writeBank(fixedBank);
+
+            std::ifstream ifsc(data, std::ifstream::in | std::ifstream::binary);
+            while (ifsc.read(&c, sizeof(char)))
+            {
+                ofs.write(&c, sizeof(char));
+            }
+            if (!ofs)
+            {
+                std::cerr << "Faild to write file." << std::endl;
+                exit(1);
+            }
+            ofs.close();
+            return;
+        }
+
+        int highestBank = nextAdditionalBank + 1;
+        if ((highestBank & 1) == 0)
+        {
+            highestBank++;
+        }
+        int bankLimit = (expdevice & Expdev::VRC6) ? 0x1f :
+            (expdevice & Expdev::MMC5) ? 0x7f : 0x3f;
+        if (highestBank > bankLimit)
+        {
+            std::cerr << "DSP PRG bank count has reached mapper maximum." << std::endl;
+            exit(1);
+        }
+
+        neshead[0x04] = (highestBank + 1) / 2;
+        for (const auto& h : neshead)
+        {
+            ofs.write(&h, sizeof(char));
+        }
+
+        for (int i = 0; i < fixedcodesize; i++)
+        {
+            ifs.read(&c, sizeof(char));
+            if (ifs)
+            {
+                ofs.write(&c, sizeof(char));
+            }
+            else
+            {
+                c = 0;
+                ofs.write(&c, sizeof(char));
+            }
+        }
+        for (const auto& banks : musicbanks)
+        {
+            writeBank(banks.first);
+        }
+        for (const auto& banks : musicbanks)
+        {
+            for (const auto& bank : banks.additional)
+            {
+                writeBank(bank);
+            }
+        }
+        int writtenBanks = nextAdditionalBank;
+        int paddingEnd = highestBank - 1;
+        while (writtenBanks < paddingEnd)
+        {
+            std::vector<unsigned char> padding(musicbanksize, 0);
+            writeBank(padding);
+            writtenBanks++;
+        }
+
+        int dpcmCapacity = mmc3Banked ? 0x3ea4 : (fullDpcmRange ? 0x3eb0 : musicbanksize);
+        auto dpcmdata = loadDpcmData(dpcmCapacity);
+        std::vector<unsigned char> dpcmLower(dpcmdata.begin(), dpcmdata.begin() + musicbanksize);
+        writeBank(dpcmLower);
+
+        std::vector<unsigned char> fixedData;
+        std::ifstream ifsc(data, std::ifstream::in | std::ifstream::binary);
+        while (ifsc.read(&c, sizeof(char)))
+        {
+            fixedData.push_back(static_cast<unsigned char>(c));
+        }
+        if (fixedData.size() < fixedDataSize)
+        {
+            std::cerr << "Invalid DSP fixed data." << std::endl;
+            exit(1);
+        }
+        std::vector<unsigned char> fixedBank(fixedprgsize, 0);
+        if (fullDpcmRange)
+        {
+            std::copy(dpcmdata.begin() + musicbanksize, dpcmdata.end(), fixedBank.begin());
+        }
+        std::copy(fixedData.begin(), fixedData.begin() + fixedDataSize,
+            fixedBank.begin() + fixedprgsize - fixedDataSize);
+        writeBank(fixedBank);
+        ofs.write(reinterpret_cast<const char*>(fixedData.data() + fixedDataSize), fixedData.size() - fixedDataSize);
+        if (!ofs)
+        {
+            std::cerr << "Faild to write file." << std::endl;
+            exit(1);
+        }
+        ofs.close();
+        return;
     }
 
     if (nesheadsize + drvsize + seqdata.size() > dpcmaddr + dpcmoffset)

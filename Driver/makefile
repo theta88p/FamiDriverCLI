@@ -102,6 +102,18 @@ drv_n163.o : drv.s $(INC_FILES)
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
 	$(AS) drv.s $(ASFLAGS) -D N163=1 -o drv_n163.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
+drv_mmc3.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D MMC3=1 -o drv_mmc3.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_mmc3.o : dsp.s $(INC_FILES)
+	@echo [Assemble] : dsp.s >>$(ERRLOG_FILE)
+	$(AS) dsp.s $(ASFLAGS) -D MMC3=1 -o dsp_mmc3.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+crt0_nes_mmc3.o : crt0_nes.s $(INC_FILES)
+	@echo [Assemble] : crt0_nes.s >>$(ERRLOG_FILE)
+	$(AS) crt0_nes.s $(ASFLAGS) -D MMC3=1 -o crt0_nes_mmc3.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
 dsp_n163.o : dsp.s $(INC_FILES)
 	@echo [Assemble] : dsp.s >>$(ERRLOG_FILE)
 	$(AS) dsp.s $(ASFLAGS) -D N163=1 -o dsp_n163.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
@@ -109,6 +121,10 @@ dsp_n163.o : dsp.s $(INC_FILES)
 crt0_nes_n163.o : crt0_nes.s $(INC_FILES)
 	@echo [Assemble] : crt0_nes.s >>$(ERRLOG_FILE)
 	$(AS) crt0_nes.s $(ASFLAGS) -D N163=1 -o crt0_nes_n163.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+crt0_nes_mmc5.o : crt0_nes.s $(INC_FILES)
+	@echo [Assemble] : crt0_nes.s >>$(ERRLOG_FILE)
+	$(AS) crt0_nes.s $(ASFLAGS) -D MMC5=1 -o crt0_nes_mmc5.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 dsp_ss5b.o : dsp.s $(INC_FILES)
 	@echo [Assemble] : dsp.s >>$(ERRLOG_FILE)
@@ -192,7 +208,7 @@ else
 DSP_DATA_FILE =	data_nes.o
 
 CFG_NSF_FILE   =	nsf.cfg
-CFG_DSP_FILE   =	nes.cfg
+CFG_DSP_FILE   =	nes_mmc3.cfg
 CFG_DSP_VRC6_FILE   =	nes_vrc6.cfg
 CFG_DSP_MMC5_FILE   =	nes_mmc5.cfg
 CFG_DSP_SS5B_FILE   =	nes_ss5b.cfg
@@ -226,14 +242,14 @@ MAIN_NSF_FILES =	main_nsf.o		\
 
 endif
 
-MAIN_DSP_FILES =	ines.o			\
-				crt0_nes.o		\
+MAIN_DSP_FILES =	ines_mmc3.o	\
+				crt0_nes_mmc3.o	\
 				nmi_main_nes.o	\
 				irq_main.o		\
 				main_nes.o		\
-				drv.o			\
+				drv_mmc3.o		\
 				$(DSP_DATA_FILE)	\
-				dsp.o			\
+				dsp_mmc3.o		\
 
 MAIN_DSP_VRC6_FILES =	ines_vrc6.o	\
 				crt0_nes_vrc6.o	\
@@ -245,7 +261,7 @@ MAIN_DSP_VRC6_FILES =	ines_vrc6.o	\
 				dsp_vrc6.o		\
 
 MAIN_DSP_MMC5_FILES =	ines_mmc5.o	\
-				crt0_nes.o		\
+				crt0_nes_mmc5.o	\
 				nmi_main_nes.o	\
 				irq_main.o		\
 				main_nes.o		\
