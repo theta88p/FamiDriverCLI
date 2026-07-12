@@ -1,5 +1,6 @@
 #DEBUG = 1
 #DEBUG_VRC6 = 1
+#DEBUG_VRC7 = 1
 #DEBUG_MMC5 = 1
 #DEBUG_SS5B = 1
 #DEBUG_N163 = 1
@@ -76,7 +77,7 @@ CP      = copy
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
 	$(AS) drv.s $(ASFLAGS) -D FDS=1 -o drv_fds.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
-	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -D VRC6=1 -D SS5B=1 -D FDS=1 -D N163=1 -o drv_all.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -D VRC6=1 -D VRC7=1 -D SS5B=1 -D FDS=1 -D N163=1 -o drv_all.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 	@echo [Assemble] : crt0_nes.s >>$(ERRLOG_FILE)
 	$(AS) crt0_nes.s $(ASFLAGS) -D VRC6=1 -o crt0_nes_vrc6.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
@@ -84,6 +85,8 @@ CP      = copy
 	$(AS) drv.s $(ASFLAGS) -D VRC6=1 -o drv_vrc6.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 	@echo [Assemble] : dsp.s >>$(ERRLOG_FILE)
 	$(AS) dsp.s $(ASFLAGS) -D VRC6=1 -o dsp_vrc6.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D VRC7=1 -o drv_vrc7.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 	@echo [Assemble] : drv.s >>$(ERRLOG_FILE)
 	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -o drv_mmc5.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
@@ -356,7 +359,7 @@ endif
 
 else
 
-all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_ss5b.bin drv_n163.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_mmc5 dsp_ss5b dsp_n163 dsp_fds
+all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_vrc7.bin drv_ss5b.bin drv_n163.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_mmc5 dsp_ss5b dsp_n163 dsp_fds
 
 drv.bin : drv.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
@@ -367,6 +370,10 @@ drv_mmc5.bin : drv_mmc5.o $(MAIN_NSF_FILES)
 	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 drv_vrc6.bin : drv_vrc6.o $(MAIN_NSF_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_vrc7.bin : drv_vrc7.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 

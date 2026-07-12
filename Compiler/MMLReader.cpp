@@ -181,15 +181,41 @@ void MMLReader::readMML()
         totalpos += n163_wavdata.size();
     }
 
+    if (expdevice & Expdev::VRC7)
+    {
+        linenum = 1;
+        ss.clear();
+        ss.seekg(0);
+        readVrc7Patch();
+    }
+
     linenum = 1;
     ss.clear();
     ss.seekg(0);    //読み込み位置を戻す
 
     int envsize = 0;
     readEnvelope(envsize);
+    if (expdevice & Expdev::VRC7)
+    {
+        for (const auto& [k, source] : envdata)
+        {
+            EnvData reversed = source;
+            reversed.addr = totalpos + envsize;
+            for (size_t i = 2; i + 1 < reversed.data.size(); i += 2)
+            {
+                reversed.data[i] = static_cast<unsigned char>(-static_cast<signed char>(reversed.data[i]));
+            }
+            envsize += static_cast<int>(reversed.data.size());
+            vrc7FreqEnvdata[k] = reversed;
+        }
+    }
     totalpos += envsize;
 
     for (const auto& [k, v] : envdata)
+    {
+        std::copy(v.data.begin(), v.data.end(), std::back_inserter(body));
+    }
+    for (const auto& [k, v] : vrc7FreqEnvdata)
     {
         std::copy(v.data.begin(), v.data.end(), std::back_inserter(body));
     }
@@ -1401,6 +1427,76 @@ void MMLReader::readEnvelope(int& envsize)
 }
 
 
+void MMLReader::readVrc7Patch()
+{
+    char c;
+    int n;
+    vrc7Patch.clear();
+
+    while (ss.get(c))
+    {
+        skipSpace();
+        skipComment();
+        if (c != '@' || !isNextStr("vrc7"))
+        {
+            if (c == '\n')
+            {
+                linenum++;
+            }
+            continue;
+        }
+
+        skipSpace();
+        if (!getMultiDigit(n) || n != 0)
+        {
+            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch number must be 0." << std::endl;
+            exit(1);
+        }
+        if (!vrc7Patch.empty())
+        {
+            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch #0 is already defined." << std::endl;
+            exit(1);
+        }
+
+        skipSpace();
+        if (!isNextChar('{'))
+        {
+            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Missing {." << std::endl;
+            exit(1);
+        }
+
+        while (!ss.eof())
+        {
+            skipSpace();
+            if (getMultiDigit(n))
+            {
+                if (n < 0 || n > 255 || vrc7Patch.size() >= 8)
+                {
+                    std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch data must be exactly 8 bytes (0 to 255)." << std::endl;
+                    exit(1);
+                }
+                vrc7Patch.push_back(static_cast<unsigned char>(n));
+            }
+            else if (getc(c))
+            {
+                if (c == '}')
+                {
+                    break;
+                }
+                std::cerr << "Line " << linenum << " : [VRC7 patch definition] Invalid character." << std::endl;
+                exit(1);
+            }
+        }
+
+        if (vrc7Patch.size() != 8)
+        {
+            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch data must be exactly 8 bytes." << std::endl;
+            exit(1);
+        }
+    }
+}
+
+
 void MMLReader::readWaveData(std::vector<unsigned char>& out)
 {
     char c;
@@ -1858,6 +1954,21 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
         n163WaveSetup = setup;
     };
 
+    auto pushVrc7Patch = [&](int tone)
+    {
+        if (tr.device < DEV_VRC7_CH1 || tr.device > DEV_VRC7_CH6 || tone != 0)
+        {
+            return;
+        }
+        if (vrc7Patch.size() != 8)
+        {
+            std::cerr << "Line " << linenum << " : VRC7 custom instrument @0 is not defined." << std::endl;
+            exit(1);
+        }
+        data.push_back(VRC7_PATCH);
+        data.insert(data.end(), vrc7Patch.begin(), vrc7Patch.end());
+    };
+
     ss.seekg(startpos);
     int note = 0;
 
@@ -1964,11 +2075,15 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
 
                         if (args.size() >= 2)
                         {
-                            pushEnvAssign(data, envdata, cmd, args[0], args[1], true, offset);
+                            auto& selectedEnvdata = (cmd == FREQ_ENV && tr.device >= DEV_VRC7_CH1 && tr.device <= DEV_VRC7_CH6)
+                                ? vrc7FreqEnvdata : envdata;
+                            pushEnvAssign(data, selectedEnvdata, cmd, args[0], args[1], true, offset);
                         }
                         else if (args.size() == 1)
                         {
-                            pushEnvAssign(data, envdata, cmd, args[0], 0, true, offset);
+                            auto& selectedEnvdata = (cmd == FREQ_ENV && tr.device >= DEV_VRC7_CH1 && tr.device <= DEV_VRC7_CH6)
+                                ? vrc7FreqEnvdata : envdata;
+                            pushEnvAssign(data, selectedEnvdata, cmd, args[0], 0, true, offset);
                         }
                         else
                         {
@@ -2039,6 +2154,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                     else if (cmd == TONE)
                     {
+                        pushVrc7Patch(args[0]);
                         if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
                         {
                             pushN163WaveSetup(args[0]);
@@ -2421,6 +2537,12 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 }
                 else
                 {
+                    if (tr.device >= DEV_VRC7_CH1 && tr.device <= DEV_VRC7_CH6 && (n < 0 || n > 15))
+                    {
+                        std::cerr << "Line " << linenum << " : VRC7 instrument number must be 0 to 15." << std::endl;
+                        exit(1);
+                    }
+                    pushVrc7Patch(n);
                     if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
                     {
                         pushN163WaveSetup(n);
@@ -2698,7 +2820,14 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                             exit(1);
                         }
                     }
-                    getAndPushEnvAssign(data, envdata, FREQ_ENV, f_offset);
+                    if (tr.device >= DEV_VRC7_CH1 && tr.device <= DEV_VRC7_CH6)
+                    {
+                        getAndPushEnvAssign(data, vrc7FreqEnvdata, FREQ_ENV, f_offset);
+                    }
+                    else
+                    {
+                        getAndPushEnvAssign(data, envdata, FREQ_ENV, f_offset);
+                    }
                     break;
                 }
                 else if (c == 'n' || c == 'N')   //ノートエンベロープ
@@ -2880,6 +3009,12 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         if (getMultiDigit(n))
                         {
                             tr.device = n;
+
+                            if (tr.device >= DEV_VRC7_CH1 && tr.device <= DEV_VRC7_CH6 && !(expdevice & Expdev::VRC7))
+                            {
+                                std::cerr << "Line " << linenum << " : VRC7 track requires #expdevice VRC7." << std::endl;
+                                exit(1);
+                            }
 
                             if (tr.device == DEV_FDS)
                             {

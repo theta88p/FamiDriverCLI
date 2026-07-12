@@ -182,6 +182,8 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ;fa	:@fdsm	FDSモジュレータ番号
 ;fb	:@fdse	FDSモジュレーションエンベロープ
 ;fc	:@n163c	N163発音数
+;fd	:N163波形設定
+;fe	:VRC7ユーザー音色設定
 
 ; ------------------------------------------------------------------------
 ; main
@@ -256,6 +258,15 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #%00000011
 		sta $5015
 .endif
+.ifdef VRC7
+		ldy #$30
+		lda #$0f
+	@mute_vrc7:
+		jsr vrc7_write
+		iny
+		cpy #$36
+		bcc @mute_vrc7
+.endif
 .ifdef SS5B
 		lda #0
 		sta SS5BTone + 0
@@ -286,7 +297,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta ProcTr
 		sta SpdFreq
 		sta SpdCtr
-		.if .defined(MMC3) .or .defined(VRC6) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
+		.if .defined(MMC3) .or .defined(VRC6) .or .defined(VRC7) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
 		lda #2
 		.else
 		lda #0
@@ -316,6 +327,17 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta EnvFrags, x
 		sta Tone, x
 		sta Frags, x
+.ifdef VRC7
+		lda Device, x
+		cmp #DEV_VRC7_CH1
+		bcc :+
+		cmp #DEV_VRC7_CH6 + 1
+		bcs :+
+		lda #1
+		sta Tone, x
+	:
+.endif
+		lda #0
 		sta FEnvShift, x
 .ifdef N163
 		sta N163FreqShift, x
@@ -350,7 +372,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #0
 		sta Work
 		sta SeqAddr_L
-		.if .defined(VRC6)
+		.if .defined(VRC6) .or .defined(VRC7)
 		lda #$80
 		.elseif .defined(MMC3) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
 		lda #$a0
@@ -1192,6 +1214,13 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda Device, x
 		cmp #DEV_FDS
 		beq @fds
+.ifdef VRC7
+		cmp #DEV_VRC7_CH1
+		bcc @not_vrc7
+		cmp #DEV_VRC7_CH6 + 1
+		bcc @fds			;VRC7も周波数値と音程の増減方向が同じ
+	@not_vrc7:
+.endif
 		lda SSwpEndHT, x
 		bmi @neg			;変化方向がプラスならDepthをマイナスにする。マイナスなら何もしない
 		jmp @invert
@@ -1348,6 +1377,28 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #4
 		jsr addptr
 		rts
+
+	vrc7_patch:		;VRC7ユーザー音色設定
+.ifdef VRC7
+		ldy #1
+	@L:
+		sty Work + 6
+		lda (Work), y
+		pha
+		tya
+		sec
+		sbc #1
+		tay
+		pla
+		jsr vrc7_write
+		ldy Work + 6
+		iny
+		cpy #9
+		bcc @L
+.endif
+		lda #9
+		jsr addptr
+		rts
 		
 	lower_table:
 		.word def_rest - 1
@@ -1389,6 +1440,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		.word fds_mod_env - 1
 		.word n163_ch_count - 1
 		.word n163_wave_setup - 1
+		.word vrc7_patch - 1
 	upper_table_end:
 	
 
@@ -1563,13 +1615,19 @@ sw_sweep_delay_table:
 		cmp #DEV_VRC6_SAW
 		beq saw
 .endif
+.ifdef VRC7
+		cmp #DEV_VRC7_CH1
+		bcs vrc7
+.endif
 .ifdef FDS
 		cmp #DEV_FDS
 		beq fds
 .endif
 .ifdef N163
 		cmp #DEV_N163_CH1
-		bcs n163
+		bcc :+
+		jmp n163
+	:
 .endif
 .ifdef SS5B
 		cmp #DEV_SS5B_SQR1
@@ -1605,6 +1663,27 @@ sw_sweep_delay_table:
 		lda Freq_5B + 1, y
 		sta Work + 3
 		jmp calc
+.endif
+	vrc7:
+.ifdef VRC7
+		lda Work + 9
+		asl
+		tay
+		lda Freq_VRC7, y
+		sta Work + 2
+		lda Freq_VRC7 + 1, y
+		and #$01
+		sta Work + 3
+		lda Work + 8
+		cmp #8
+		bcc :+
+		lda #7
+	:	asl
+		ora Work + 3
+		sta Work + 3
+		lda #0
+		sta Work + 4		;VRC7は16bit値。スイープ用の上位バイトを必ずクリア
+		rts
 .endif
 	fds:
 .ifdef FDS
@@ -1786,6 +1865,15 @@ sw_sweep_delay_table:
 		lda Device, x
 		cmp #DEV_2A03_DPCM	;DPCMは音量計算しない
 		beq next
+.ifdef VRC7
+		cmp #DEV_VRC7_CH1
+		bcc :+
+		cmp #DEV_VRC7_CH6 + 1
+		bcs :+
+		lda #15			;VRC7のキーオフはハードウェアのリリースに任せる
+		jmp store			;明示的なトラックボリュームはcalc_volumeで反映
+	:
+.endif
 		lda Frags, x
 		and #FRAG_IS_KEYON	;キーオフされていたら無音に
 		beq ld0				;それ以外は最大値をロード
@@ -1904,6 +1992,15 @@ sw_sweep_delay_table:
 
 ;ソフトウェアスイープ
 .proc ssweep
+.ifdef VRC7
+		lda Device, x
+		cmp #DEV_VRC7_CH1
+		bcc :+
+		cmp #DEV_VRC7_CH6 + 1
+		bcs :+
+		jmp vrc7_ssweep
+	:
+.endif
 		lda Frags, x
 		and #FRAG_KEYON
 		bne keyon
@@ -1967,6 +2064,17 @@ sw_sweep_delay_table:
 		inc SSwpCur_X, x
 	@N:
 	compare_plus:
+.ifdef VRC7
+		lda Device, x
+		cmp #DEV_VRC7_CH1
+		bcc :+
+		cmp #DEV_VRC7_CH6 + 1
+		bcs :+
+		lda #0
+		sta SSwpCur_X, x
+		sta SSwpEnd_X, x	;VRC7スイープは16bit値として終点を比較
+	:
+.endif
 		lda SSwpEnd_X, x
 		cmp SSwpCur_X, x
 		bcs @compare_plus_h
@@ -2053,6 +2161,17 @@ sw_sweep_delay_table:
 		dec SSwpCur_X, x
 	@N:
 	compare_minus:
+.ifdef VRC7
+		lda Device, x
+		cmp #DEV_VRC7_CH1
+		bcc :+
+		cmp #DEV_VRC7_CH6 + 1
+		bcs :+
+		lda #0
+		sta SSwpCur_X, x
+		sta SSwpEnd_X, x	;VRC7スイープは16bit値として終点を比較
+	:
+.endif
 		lda SSwpEnd_X, x
 		cmp SSwpCur_X, x
 		bcc exec
@@ -2091,6 +2210,252 @@ sw_sweep_delay_table:
 		sta Freq_X, x
 		rts
 .endproc
+
+.ifdef VRC7
+;VRC7はF-NumberとBlockの境界でレジスタ値が不連続になるため、
+;スイープ中は実周波数に比例する F-Number << Block の24bit値を使用する。
+.proc vrc7_ssweep
+		lda Frags, x
+		and #FRAG_KEYON
+		bne keyon
+		lda DrvFrags
+		and #DRV_DOUBLE
+		beq :+
+		jmp output
+	:
+		lda SSwpCtr, x
+		cmp #1
+		beq update
+		dec SSwpCtr, x
+		jmp output
+	keyon:
+		lda RefNoteN, x
+		jsr calcfreq
+		jsr normalize_freq
+		lda Work + 5
+		sta SSwpCur_L, x
+		lda Work + 6
+		sta SSwpCur_H, x
+		lda RefNoteN, x
+		clc
+		adc SSwpEndHT, x
+		jsr calcfreq
+		jsr normalize_freq
+		lda Work + 5
+		sta SSwpEnd_L, x
+		lda Work + 6
+		sta SSwpEnd_H, x
+		lda #0
+		sta SSwpCur_X, x
+		sta SSwpEnd_X, x
+		lda SSwpDelay, x
+		clc
+		adc SSwpCtr, x
+		sta SSwpCtr, x
+		jmp output
+	update:
+		lda SSwpRate, x
+		bpl unit_step
+		lda #1
+		sta Work + 5
+		lda #7
+		sec
+		sbc SSwpDepth, x
+		and #$07
+		tay
+		beq @step_ready
+	@step_shift:
+		asl Work + 5
+		dey
+		bne @step_shift
+	@step_ready:
+		lda #1
+		sta SSwpCtr, x
+		jmp step_ready
+	unit_step:
+		lda #1
+		sta Work + 5
+		lda SSwpRate, x
+		sta SSwpCtr, x
+	step_ready:
+		lda SSwpEndHT, x
+		bmi subtract
+		jsr add_fnum
+		jsr clamp_plus
+		jmp output
+	subtract:
+		jsr sub_fnum
+		jsr clamp_minus
+	output:
+		lda SSwpCur_L, x
+		sta Freq_L, x
+		lda SSwpCur_H, x
+		sta Freq_H, x
+		lda #0
+		sta Freq_X, x
+		rts
+
+	;Work+2/3のVRC7値をF-Number 256～511へ寄せ、Block/F-Number比較を一意にする。
+	normalize_freq:
+		lda Work + 2
+		sta Work + 5
+		lda Work + 3
+		and #$01
+		sta Work + 7		;F-Number上位bit
+		lda Work + 3
+		lsr
+		and #$07
+		sta Work + 8		;Block
+	@normalize:
+		lda Work + 7
+		bne @encode
+		lda Work + 8
+		beq @encode
+		asl Work + 5
+		rol Work + 7
+		dec Work + 8
+		jmp @normalize
+	@encode:
+		lda Work + 8
+		asl
+		ora Work + 7
+		sta Work + 6
+		rts
+
+	add_fnum:
+		lda SSwpCur_H, x
+		lsr
+		and #$07
+		sta Work + 8		;Block
+		lda SSwpCur_H, x
+		and #$01
+		sta Work + 7		;F-Number上位bit
+		clc
+		lda SSwpCur_L, x
+		adc Work + 5
+		sta Work + 6
+		lda Work + 7
+		adc #0
+		sta Work + 7
+		cmp #2
+		bcc @encode
+		lda Work + 8
+		cmp #7
+		bcs @encode
+		lsr Work + 7
+		ror Work + 6
+		inc Work + 8
+	@encode:
+		lda Work + 6
+		sta SSwpCur_L, x
+		lda Work + 8
+		asl
+		sta Work + 6
+		lda Work + 7
+		and #$01
+		ora Work + 6
+		sta SSwpCur_H, x
+		rts
+
+	sub_fnum:
+		lda SSwpCur_H, x
+		lsr
+		and #$07
+		sta Work + 8		;Block
+		lda SSwpCur_H, x
+		and #$01
+		sta Work + 7		;F-Number上位bit
+		sec
+		lda SSwpCur_L, x
+		sbc Work + 5
+		sta Work + 6
+		lda Work + 7
+		sbc #0
+		sta Work + 7
+		bne @encode
+		lda Work + 8
+		beq @encode
+		asl Work + 6
+		rol Work + 7
+		dec Work + 8
+	@encode:
+		lda Work + 6
+		sta SSwpCur_L, x
+		lda Work + 8
+		asl
+		sta Work + 6
+		lda Work + 7
+		and #$01
+		ora Work + 6
+		sta SSwpCur_H, x
+		rts
+
+	clamp_plus:
+		lda SSwpEnd_H, x
+		lsr
+		sta Work + 8
+		lda SSwpCur_H, x
+		lsr
+		cmp Work + 8
+		bcc @done
+		bne @clamp
+		jsr compare_fnum
+		bcc @done
+	@clamp:
+		jsr clamp
+	@done:
+		rts
+
+	clamp_minus:
+		lda SSwpEnd_H, x
+		lsr
+		sta Work + 8
+		lda SSwpCur_H, x
+		lsr
+		cmp Work + 8
+		bcc @clamp
+		bne @done
+		jsr compare_fnum
+		bcc @clamp
+		beq @clamp
+		jmp @done
+	@clamp:
+		jsr clamp
+	@done:
+		rts
+
+	;C=1: current >= end、Z=1: current == end
+	compare_fnum:
+		lda SSwpCur_H, x
+		and #$01
+		sta Work + 8
+		lda SSwpEnd_H, x
+		and #$01
+		cmp Work + 8
+		bcc @current_greater
+		bne @current_less
+		lda SSwpCur_L, x
+		cmp SSwpEnd_L, x
+		rts
+	@current_greater:
+		lda #1
+		cmp #0
+		rts
+	@current_less:
+		lda #0
+		cmp #1
+		rts
+
+	clamp:
+		lda SSwpEnd_L, x
+		sta SSwpCur_L, x
+		lda SSwpEnd_H, x
+		sta SSwpCur_H, x
+		lda #1
+		sta SSwpCtr, x
+		rts
+.endproc
+.endif
 
 
 ;音量エンベロープ
@@ -2663,6 +3028,29 @@ sw_sweep_delay_table:
 	vrc6_end:
 .endif
 
+.ifdef VRC7
+	vrc7_ch:
+		ldx #DEV_VRC7_CH1
+	@L:
+		lda ActTbl, x
+		cmp #$ff
+		beq @next
+		stx Work + 6
+		txa
+		sec
+		sbc #DEV_VRC7_CH1
+		tay
+		lda ActTbl, x
+		tax
+		jsr write_vrc7
+		jsr writereg_end
+		ldx Work + 6
+	@next:
+		inx
+		cpx #DEV_VRC7_CH6 + 1
+		bcc @L
+.endif
+
 .ifdef MMC5
 	mmc5_sqr1:
 		ldx #DEV_MMC5_SQR1
@@ -2886,6 +3274,80 @@ sw_sweep_delay_table:
 		lda #%10000000
 		ora Freq_H, x
 		sta (Work), y
+	end:
+		rts
+.endproc
+.endif
+
+;VRC7
+.ifdef VRC7
+.proc vrc7_write
+		sty $9010
+		jsr wait_9010
+		sta $9030
+		jsr wait_9030
+		rts
+
+	wait_9030:
+		stx Work + 5
+		ldx #$08
+	@wait_loop:
+		dex
+		bne @wait_loop
+		ldx Work + 5
+	wait_9010:
+		rts
+.endproc
+
+.proc write_vrc7
+		sty Work + 1
+		tya
+		clc
+		adc #$30
+		tay
+		lda #$0f
+		sec
+		sbc Volume, x
+		sta Work
+		lda Tone, x
+		and #$0f
+		asl
+		asl
+		asl
+		asl
+		ora Work
+		jsr vrc7_write
+		lda Volume, x
+		beq end
+		lda Work + 1
+		clc
+		adc #$10
+		tay
+		lda Freq_L, x
+		jsr vrc7_write
+		lda Work + 1
+		clc
+		adc #$20
+		tay
+		lda Freq_H, x
+		sta Work
+		lda Frags, x
+		and #FRAG_KEYON
+		beq @trigger
+		lda Work
+		jsr vrc7_write		;トリガーを一度下げて再キーオン可能にする
+	@trigger:
+		lda Work
+		pha
+		lda Frags, x
+		and #FRAG_IS_KEYON
+		beq @write_trigger
+		pla
+		ora #$10
+		pha
+	@write_trigger:
+		pla
+		jsr vrc7_write
 	end:
 		rts
 .endproc
@@ -3397,6 +3859,12 @@ Freq_Saw:
 	.word	$1214
 	.word	$1110
 	.word	$1010
+.endif
+
+.ifdef VRC7
+Freq_VRC7:
+	.word	172, 182, 193, 205, 217, 230
+	.word	244, 258, 274, 290, 307, 326
 .endif
 
 .ifdef SS5B

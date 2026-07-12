@@ -58,6 +58,7 @@
 #define FDS_MOD_ENV			0xfb
 #define N163_CH_COUNT		0xfc
 #define N163_WAVE_SETUP		0xfd
+#define VRC7_PATCH			0xfe
 
 #define DEV_2A03_SQR1		0
 #define DEV_2A03_SQR2		1
@@ -81,6 +82,12 @@
 #define DEV_N163_CH6		19
 #define DEV_N163_CH7		20
 #define DEV_N163_CH8		21
+#define DEV_VRC7_CH1		22
+#define DEV_VRC7_CH2		23
+#define DEV_VRC7_CH3		24
+#define DEV_VRC7_CH4		25
+#define DEV_VRC7_CH5		26
+#define DEV_VRC7_CH6		27
 
 enum Expdev
 {
@@ -98,6 +105,7 @@ private:
 	std::stringstream ss;
 	std::wstring inputPath;
 	std::map<int, EnvData> envdata;
+	std::map<int, EnvData> vrc7FreqEnvdata;
 	std::map<int, SubData> subdata;
 	std::map<int, NoteMapDif> mapdiflist;
 	std::vector<unsigned char>lengthtbl;
@@ -113,6 +121,7 @@ private:
 	std::vector<unsigned char> n163WaveOffsets;
 	std::vector<unsigned char> n163WaveLengthRegs;
 	std::vector<unsigned char> n163WaveFreqShifts;
+	std::vector<unsigned char> vrc7Patch;
 
 	bool skipUntil(std::string input);
 	bool isDigit(char c);
@@ -142,6 +151,7 @@ private:
 	void readBrackets(int startpos, int trackheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone);
 	void readWaveData(std::vector<unsigned char>& out);
 	void readModData(std::vector<unsigned char>& out);
+	void readVrc7Patch();
 	void getCmdArgs(CommandArgs& args);
 	bool getNoteNumber(int& nn);
 

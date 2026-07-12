@@ -357,6 +357,8 @@ void FileWriter::createNes()
     }
     else if (expdevice & Expdev::VRC7)
     {
+        std::cerr << "VRC7 is not supported by NES file output." << std::endl;
+        exit(1);
     }
     else if (expdevice & Expdev::FDS)
     {
@@ -948,6 +950,7 @@ void FileWriter::createNsf()
     }
     else if (expdevice & Expdev::VRC7)
     {
+        drv += L"bin\\drv_vrc7.bin";
     }
     else if (expdevice & Expdev::FDS)
     {

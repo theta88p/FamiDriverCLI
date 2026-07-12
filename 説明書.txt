@@ -76,7 +76,7 @@ FDS音源の場合@fdswで音色を、@fdsmでモジュレータを定義した�
 #offsetf	音程					〃
 #offsetn	ノート					〃
 #offsett	音色					〃
-#expdevice	拡張音源の指定。MMC5 SS5B VRC6 FDS N163が指定できます。
+#expdevice	拡張音源の指定。MMC5 SS5B VRC6 VRC7 FDS N163が指定できます。
 			複数指定すると全音源対応のバイナリになります
 
 @m番号 { }	マップ定義
@@ -84,6 +84,7 @@ FDS音源の場合@fdswで音色を、@fdsmでモジュレータを定義した�
 @fdsw番号 { }	FDS波形定義
 @fdsm番号 { }	FDSモジュレータ定義
 @n163w番号 { }	N163波形定義
+@vrc7 0 { }	VRC7ユーザー音色定義。$00～$07レジスタの値を10進数で8個指定
 
 
 ・トラック内に書くコマンド
@@ -165,3 +166,9 @@ w		メモリ書き込み（書き込みアドレス, 書き込むデータ。16�
 19	N163 Ch6
 20	N163 Ch7
 21	N163 Ch8
+22	VRC7 Ch1
+23	VRC7 Ch2
+24	VRC7 Ch3
+25	VRC7 Ch4
+26	VRC7 Ch5
+27	VRC7 Ch6
