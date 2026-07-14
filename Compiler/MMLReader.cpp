@@ -1892,6 +1892,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     bool usePDelay = false;
     bool isLooped = false;
 	bool isLoopedMid = false;
+    bool dpcmToneSpecified = false;
+    bool dpcmDefaultRequired = false;
     bool fdsToneSpecified = false;
     bool fdsModSpecified = false;
     int sweepStart = 0;
@@ -1908,6 +1910,30 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
 
     bool preserveDefaultRest = trheadsize == 0;
     deflen = 4;
+
+    auto setDpcmDefault = [&]()
+    {
+        if (tr.device != DEV_2A03_DPCM || !dpcmDefaultRequired)
+        {
+            return;
+        }
+
+        if (!dpcmlist.count(0))
+        {
+            std::cerr << "Line " << linenum << " : DPCM #0 is not registered. Specify a DPCM tone before the first note." << std::endl;
+            exit(1);
+        }
+
+        const auto& dpcm = dpcmlist.at(0);
+        std::vector<unsigned char> defaults
+        {
+            TONE,
+            static_cast<unsigned char>(dpcm.offset / 0x40),
+            static_cast<unsigned char>(dpcm.size / 0x10),
+            static_cast<unsigned char>(dpcm.init)
+        };
+        data.insert(data.begin(), defaults.begin(), defaults.end());
+    };
 
     auto setFdsDefaults = [&]()
     {
@@ -2192,6 +2218,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                                 data.push_back(dpcmlist[args[0]].offset / 0x40);
                                 data.push_back(dpcmlist[args[0]].size / 0x10);
                                 data.push_back(dpcmlist[args[0]].init);
+                                dpcmToneSpecified = true;
                             }
                             else
                             {
@@ -2239,6 +2266,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 {
                     if (tr.device == DEV_2A03_NOISE || tr.device == DEV_2A03_DPCM)
                     {
+                        if (tr.device == DEV_2A03_DPCM && !dpcmToneSpecified)
+                        {
+                            dpcmDefaultRequired = true;
+                        }
                         //newNN = 0x0f - newNN & 0x0f;  //ドライバ側でやる
                         newNN = newNN & 0x0f;
                     }
@@ -2255,6 +2286,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             {
                 if (tr.device == DEV_2A03_NOISE || tr.device == DEV_2A03_DPCM)
                 {
+                    if (tr.device == DEV_2A03_DPCM && !dpcmToneSpecified)
+                    {
+                        dpcmDefaultRequired = true;
+                    }
                     //nn = 0x0f - nn & 0x0f;    //ドライバ側でやる
                     nn = nn & 0x0f;
                 }
@@ -2501,6 +2536,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         data.push_back(dpcmlist[n].offset / 0x40);
                         data.push_back(dpcmlist[n].size / 0x10);
                         data.push_back(dpcmlist[n].init);
+                        dpcmToneSpecified = true;
                     }
                     else
                     {
@@ -3020,12 +3056,15 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
 
                         usePDelay = false;  //疑似ディレイもリセット
 
+                        setDpcmDefault();
                         setFdsDefaults();
                         data.push_back(TRACK_END);    //終了コード
                         tr.data = data;
                         tracks.push_back(tr);
                         data.clear();
                         deflen = 4;
+                        dpcmToneSpecified = false;
+                        dpcmDefaultRequired = false;
                         fdsToneSpecified = false;
                         fdsModSpecified = false;
                         n163WaveSetup = -1;
@@ -3397,6 +3436,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (isTrack)
                 {
                     isTrack = false;
+                    setDpcmDefault();
                     setFdsDefaults();
                     data.push_back(TRACK_END);    //終了コード
                     tr.data = data;
