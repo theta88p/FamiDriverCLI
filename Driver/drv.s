@@ -581,7 +581,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		bcc lower_cmd
 		cmp #$ec
 		bcc len_note
-		cmp #$fe
+		cmp #$ff
 		bcc upper_cmd
 		
 	unknown_cmd:

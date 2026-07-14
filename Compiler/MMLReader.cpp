@@ -462,7 +462,7 @@ void MMLReader::readDifinitions()
             else if (isNextStr("offsetpcm"))
             {
                 skipSpace();
-                if (getMultiHex(n))
+                if (getMultiDigit(n))
                 {
                     dpcmoffset = n - 0xc000;
                 }
@@ -838,7 +838,7 @@ void MMLReader::readDifinitions()
                                             cmd = MEM_WRITE;
                                             int n;
                                             skipSpaceUntilNextLine();
-                                            if (getMultiHex(n))       //コマンド内容を保存
+                                            if (getMultiDigit(n))     //コマンド内容を保存
                                             {
                                                 args.push_back(0xff & n);
                                                 args.push_back((n >> 8) & 0xff);
@@ -1431,13 +1431,30 @@ void MMLReader::readVrc7Patch()
 {
     char c;
     int n;
-    vrc7Patch.clear();
+    bool isTrack = false;
+    bool isMusic = false;
+    vrc7Patches.clear();
 
     while (ss.get(c))
     {
         skipSpace();
         skipComment();
-        if (c != '@' || !isNextStr("vrc7"))
+        if (c == 't' || c == 'T')
+        {
+            if (isNextStr("rack"))
+            {
+                isTrack = true;
+            }
+        }
+        else if (c == 'm' || c == 'M')
+        {
+            if (isNextStr("usic"))
+            {
+                isMusic = true;
+            }
+        }
+
+        if (isTrack || isMusic || c != '@' || !isNextStr("vrc7u"))
         {
             if (c == '\n')
             {
@@ -1447,35 +1464,37 @@ void MMLReader::readVrc7Patch()
         }
 
         skipSpace();
-        if (!getMultiDigit(n) || n != 0)
+        if (!getMultiDigit(n) || n < 0 || n > 255)
         {
-            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch number must be 0." << std::endl;
+            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch number must be 0 to 255." << std::endl;
             exit(1);
         }
-        if (!vrc7Patch.empty())
-        {
-            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch #0 is already defined." << std::endl;
-            exit(1);
-        }
+        int patchnum = n;
 
         skipSpace();
         if (!isNextChar('{'))
         {
-            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Missing {." << std::endl;
+            continue;   //マクロ本体などにある @vrc7u番号 は選択コマンド
+        }
+        if (vrc7Patches.count(patchnum))
+        {
+            std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch #" << patchnum << " is already defined." << std::endl;
             exit(1);
         }
+
+        std::vector<unsigned char> patch;
 
         while (!ss.eof())
         {
             skipSpace();
             if (getMultiDigit(n))
             {
-                if (n < 0 || n > 255 || vrc7Patch.size() >= 8)
+                if (n < 0 || n > 255 || patch.size() >= 8)
                 {
                     std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch data must be exactly 8 bytes (0 to 255)." << std::endl;
                     exit(1);
                 }
-                vrc7Patch.push_back(static_cast<unsigned char>(n));
+                patch.push_back(static_cast<unsigned char>(n));
             }
             else if (getc(c))
             {
@@ -1488,11 +1507,12 @@ void MMLReader::readVrc7Patch()
             }
         }
 
-        if (vrc7Patch.size() != 8)
+        if (patch.size() != 8)
         {
             std::cerr << "Line " << linenum << " : [VRC7 patch definition] Patch data must be exactly 8 bytes." << std::endl;
             exit(1);
         }
+        vrc7Patches[patchnum] = patch;
     }
 }
 
@@ -1954,19 +1974,20 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
         n163WaveSetup = setup;
     };
 
-    auto pushVrc7Patch = [&](int tone)
+    auto pushVrc7Patch = [&](int patchnum)
     {
-        if (tr.device < DEV_VRC7_CH1 || tr.device > DEV_VRC7_CH6 || tone != 0)
+        if (tr.device < DEV_VRC7_CH1 || tr.device > DEV_VRC7_CH6)
         {
             return;
         }
-        if (vrc7Patch.size() != 8)
+        if (!vrc7Patches.count(patchnum))
         {
-            std::cerr << "Line " << linenum << " : VRC7 custom instrument @0 is not defined." << std::endl;
+            std::cerr << "Line " << linenum << " : VRC7 custom instrument #" << patchnum << " is not defined." << std::endl;
             exit(1);
         }
         data.push_back(VRC7_PATCH);
-        data.insert(data.end(), vrc7Patch.begin(), vrc7Patch.end());
+        const auto& patch = vrc7Patches[patchnum];
+        data.insert(data.end(), patch.begin(), patch.end());
     };
 
     ss.seekg(startpos);
@@ -2154,7 +2175,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                     else if (cmd == TONE)
                     {
-                        pushVrc7Patch(args[0]);
+                        if (args[0] == 0)
+                        {
+                            pushVrc7Patch(0);
+                        }
                         if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
                         {
                             pushN163WaveSetup(args[0]);
@@ -2542,7 +2566,10 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         std::cerr << "Line " << linenum << " : VRC7 instrument number must be 0 to 15." << std::endl;
                         exit(1);
                     }
-                    pushVrc7Patch(n);
+                    if (n == 0)
+                    {
+                        pushVrc7Patch(0);
+                    }
                     if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
                     {
                         pushN163WaveSetup(n);
@@ -2555,6 +2582,24 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         fdsToneSpecified = true;
                     }
                 }
+            }
+            else if (isNextStr("vrc7u") || isNextStr("VRC7U"))
+            {
+                if (!(expdevice & Expdev::VRC7) || tr.device < DEV_VRC7_CH1 || tr.device > DEV_VRC7_CH6)
+                {
+                    std::cerr << "Line " << linenum << " : @vrc7u can only be used in a VRC7 track." << std::endl;
+                    exit(1);
+                }
+                skipSpace();
+                if (!getMultiDigit(n) || n < 0 || n > 255)
+                {
+                    std::cerr << "Line " << linenum << " : VRC7 custom instrument number must be 0 to 255." << std::endl;
+                    exit(1);
+                }
+                pushVrc7Patch(n);
+                data.push_back(TONE);
+                data.push_back(0);
+                tone = 0;
             }
             else if (isNextStr("fds"))
             {
@@ -3166,7 +3211,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             break;
         case 'w':   //メモリ書き込み
         case 'W':
-            if (getMultiHex(n))
+            if (getMultiDigit(n))
             {
                 int address, value;
                 bool res = false;
@@ -3175,7 +3220,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (isNextChar(','))
                 {
                     skipSpace();
-                    if (getMultiHex(n))
+                    if (getMultiDigit(n))
                     {
                         value = n;
                         data.push_back(MEM_WRITE);
@@ -3681,74 +3726,47 @@ void MMLReader::syntaxErr()
 }
 
 
-bool MMLReader::getMultiHex(int& res)
-{
-    char c;
-    bool sign = true;
-    std::string d;
-
-    skipSpace();
-
-    while (getc(c))
-    {
-        if (isHex(c))
-        {
-            d += c;
-        }
-        else if (c == '-')
-        {
-            if (d.empty())
-            {
-                d += c;
-            }
-            else
-            {
-                break;
-            }
-        }
-        else
-        {
-            ss.seekg((int)ss.tellg() - 1);    //読み込み位置を戻す
-            break;
-        }
-    }
-
-    if (!d.empty())
-    {
-        res = std::stoi(d, nullptr, 16);
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-
 bool MMLReader::getMultiDigit(int& res)
 {
     char c;
-    bool sign = true;
     std::string d;
+    int base = 10;
 
     skipSpace();
 
-    while (getc(c))
+    if (getc(c))
     {
-        if (isDigit(c))
+        if (c == '-')
         {
             d += c;
+            if (!getc(c))
+            {
+                return false;
+            }
         }
-        else if (c == '-')
+
+        if (c == '$')
         {
-            if (d.empty())
-            {
-                d += c;
-            }
-            else
-            {
-                break;
-            }
+            base = 16;
+        }
+        else if (c == '%')
+        {
+            base = 2;
+        }
+        else
+        {
+            ss.seekg((int)ss.tellg() - 1);
+        }
+    }
+
+    const size_t signLength = d.size();
+    while (getc(c))
+    {
+        const bool validDigit = base == 16 ? isHex(c) :
+            base == 2 ? c == '0' || c == '1' : isDigit(c);
+        if (validDigit)
+        {
+            d += c;
         }
         else
         {
@@ -3757,9 +3775,9 @@ bool MMLReader::getMultiDigit(int& res)
         }
     }
 
-    if (!d.empty())
+    if (d.size() > signLength)
     {
-        res = std::stoi(d);
+        res = std::stoi(d, nullptr, base);
         return true;
     }
     else

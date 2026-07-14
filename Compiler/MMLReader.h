@@ -121,7 +121,7 @@ private:
 	std::vector<unsigned char> n163WaveOffsets;
 	std::vector<unsigned char> n163WaveLengthRegs;
 	std::vector<unsigned char> n163WaveFreqShifts;
-	std::vector<unsigned char> vrc7Patch;
+	std::map<int, std::vector<unsigned char>> vrc7Patches;
 
 	bool skipUntil(std::string input);
 	bool isDigit(char c);
@@ -136,7 +136,6 @@ private:
 	bool getc(char& c);
 	void syntaxErr();
 	bool getMultiDigit(int& d);
-	bool getMultiHex(int& d);
 	bool getStrInQuote(std::string& str);
 	bool getByte(int& h);
 	void calcLength(char cmd, std::vector<unsigned char>& data, std::vector<unsigned char> tbl, int& grace, int shorten, bool preserveDefaultRest = false);
