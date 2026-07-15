@@ -1897,6 +1897,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     bool fdsToneSpecified = false;
     bool fdsModSpecified = false;
     int sweepStart = 0;
+    int normalizedSweepStops = 0;
+    bool sweepStopBeforeSlur = false;
     int pddist = 4;
     int pdvol = 0;
     int pdlen = 0;
@@ -1907,6 +1909,120 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     TrackData tr;
     std::queue<unsigned char> prevnotes;
 	std::vector<unsigned char> data;
+
+    auto skipMmlTrivia = [](const std::string& source, size_t& pos)
+    {
+        while (pos < source.size())
+        {
+            char current = source[pos];
+            if (current == ' ' || current == '\t' || current == '\r' || current == '\n')
+            {
+                pos++;
+            }
+            else if (current == '/' && pos + 1 < source.size() && source[pos + 1] == '/')
+            {
+                pos += 2;
+                while (pos < source.size() && source[pos] != '\n')
+                {
+                    pos++;
+                }
+            }
+            else if (current == '/' && pos + 1 < source.size() && source[pos + 1] == '*')
+            {
+                pos += 2;
+                while (pos + 1 < source.size() && !(source[pos] == '*' && source[pos + 1] == '/'))
+                {
+                    pos++;
+                }
+                if (pos + 1 < source.size())
+                {
+                    pos += 2;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+    };
+
+    auto isSweepStopAt = [&](const std::string& source, size_t pos)
+    {
+        skipMmlTrivia(source, pos);
+        if (pos >= source.size() || (source[pos] != 's' && source[pos] != 'S'))
+        {
+            return false;
+        }
+
+        pos++;
+        skipMmlTrivia(source, pos);
+        return pos < source.size() && source[pos] == '*';
+    };
+
+    auto nextTokenIsSlur = [&]()
+    {
+        std::streampos streampos = ss.tellg();
+        if (streampos == std::streampos(-1))
+        {
+            return false;
+        }
+
+        std::string source = ss.str();
+        size_t pos = static_cast<size_t>(streampos);
+        skipMmlTrivia(source, pos);
+        return pos < source.size() && source[pos] == '&';
+    };
+
+    auto slurTargetHasSweepStop = [&]()
+    {
+        std::streampos streampos = ss.tellg();
+        if (streampos == std::streampos(-1))
+        {
+            return false;
+        }
+
+        std::string source = ss.str();
+        size_t pos = static_cast<size_t>(streampos);
+        if (isSweepStopAt(source, pos))
+        {
+            return true;
+        }
+
+        skipMmlTrivia(source, pos);
+        if (pos >= source.size() || !((source[pos] >= 'a' && source[pos] <= 'g') ||
+            (source[pos] >= 'A' && source[pos] <= 'G')))
+        {
+            return false;
+        }
+
+        pos++;
+        skipMmlTrivia(source, pos);
+        while (pos < source.size() && (source[pos] == '+' || source[pos] == '-'))
+        {
+            pos++;
+            skipMmlTrivia(source, pos);
+        }
+
+        while (pos < source.size())
+        {
+            skipMmlTrivia(source, pos);
+            if (pos >= source.size())
+            {
+                break;
+            }
+
+            char current = source[pos];
+            if ((current >= '0' && current <= '9') || current == '.' || current == '%' ||
+                current == '~' || current == '^')
+            {
+                pos++;
+                continue;
+            }
+            break;
+        }
+
+        return isSweepStopAt(source, pos);
+    };
 
     bool preserveDefaultRest = trheadsize == 0;
     deflen = 4;
@@ -2523,6 +2639,16 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             break;
         case '&':   //スラー
             data.push_back(TAI_SLUR);
+            if (sweepStopBeforeSlur || slurTargetHasSweepStop())
+            {
+                data.push_back(SW_SWEEP_STOP);
+                sweepStart = 0;
+                if (!sweepStopBeforeSlur)
+                {
+                    normalizedSweepStops++;
+                }
+                sweepStopBeforeSlur = false;
+            }
             break;
         case '@':   //音色指定か各種定義
             skipSpace();
@@ -3161,7 +3287,18 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 getc(c);
                 if (c == '*')   //解除
                 {
-                    data.push_back(SW_SWEEP_STOP);
+                    if (normalizedSweepStops > 0)
+                    {
+                        normalizedSweepStops--;
+                    }
+                    else if (nextTokenIsSlur())
+                    {
+                        sweepStopBeforeSlur = true;
+                    }
+                    else
+                    {
+                        data.push_back(SW_SWEEP_STOP);
+                    }
                     sweepStart = 0;
                 }
                 else if (isDigit(c) || c == '-')
