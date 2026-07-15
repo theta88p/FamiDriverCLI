@@ -535,6 +535,14 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda GateCtr, x
 		cmp #1
 		bne cnt				;ゲートカウンタが1でなければカウント処理へ
+		lda Ptr_L, x		;&が続く場合はゲートによるキーオフを行わない
+		sta Work
+		lda Ptr_H, x
+		sta Work + 1
+		ldy #0
+		lda (Work), y
+		cmp #$73			;&
+		beq cnt
 		lda Frags, x		;ゲートカウンタが1になったらキーオフ
 		and #FRAG_KEYON_CLR	& FRAG_KEYON_DIS_CLR & FRAG_IS_KEYON_CLR
 		ora #FRAG_KEYOFF
