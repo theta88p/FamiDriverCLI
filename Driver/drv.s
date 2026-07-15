@@ -1974,6 +1974,8 @@ sw_sweep_delay_table:
 		sta $8001
 .elseif .defined(VRC6)
 		sta $8000
+.elseif .defined(VRC7)
+		sta $8000
 .elseif .defined(MMC5)
 		ora #$80
 		sta $5115

@@ -47,6 +47,34 @@ start:
 	sta $f001  ; disable IRQ
 .endif
 
+.ifdef VRC7
+	lda #$00
+	sta $8000  ; CPU $8000-$9FFF = PRG bank 0 until the first song selects bank 2
+	lda #$00
+	sta $8010  ; CPU $A000-$BFFF = PRG bank 0 (DSP display code)
+	lda #$1e
+	sta $9000  ; CPU $C000-$DFFF = DPCM bank 30
+	lda #$00
+	sta $a000  ; CHR $0000-$03FF = bank 0
+	lda #$01
+	sta $a010
+	lda #$02
+	sta $b000
+	lda #$03
+	sta $b010
+	lda #$04
+	sta $c000
+	lda #$05
+	sta $c010
+	lda #$06
+	sta $d000
+	lda #$07
+	sta $d010
+	lda #$00
+	sta $e000  ; Vertical mirroring
+	sta $f000  ; Disable IRQ
+.endif
+
 .ifdef MMC5
 	lda #$03
 	sta $5100  ; 8K PRG bank mode

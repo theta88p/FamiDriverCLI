@@ -357,8 +357,8 @@ void FileWriter::createNes()
     }
     else if (expdevice & Expdev::VRC7)
     {
-        std::cerr << "VRC7 is not supported by NES file output." << std::endl;
-        exit(1);
+        drv += L"bin\\dsp_vrc7_code.bin";
+        data += L"bin\\dsp_vrc7_data.bin";
     }
     else if (expdevice & Expdev::FDS)
     {
@@ -416,6 +416,12 @@ void FileWriter::createNes()
         neshead[0x06] = 0x81; //VRC6
 		neshead[0x07] = 0x10; //VRC6
 	}
+    else if (expdevice & Expdev::VRC7)
+    {
+        neshead[0x04] = 0x10; //PRG16K x16
+        neshead[0x06] = 0x51; //VRC7 (Mapper 85), vertical mirroring
+        neshead[0x07] = 0x50;
+    }
     else if (expdevice & Expdev::MMC5)
     {
         neshead[0x04] = 0x02; //PRG16K x2
@@ -442,16 +448,17 @@ void FileWriter::createNes()
     }
 
     const bool mmc3Banked = expdevice == 0;
-    const bool bankedDsp = mmc3Banked || (expdevice & (Expdev::VRC6 | Expdev::MMC5 | Expdev::SS5B | Expdev::N163));
+    const bool bankedDsp = mmc3Banked || (expdevice & (Expdev::VRC6 | Expdev::VRC7 | Expdev::MMC5 | Expdev::SS5B | Expdev::N163));
     if (bankedDsp)
     {
         const int musicbanksize = 0x2000;
         const int fixedprgsize = 0x2000;
         const bool vrc6Banked = expdevice & Expdev::VRC6;
+        const bool vrc7Banked = expdevice & Expdev::VRC7;
         const bool n163Banked = expdevice & Expdev::N163;
         const bool fullDpcmRange = mmc3Banked || (expdevice & (Expdev::MMC5 | Expdev::SS5B));
         const int fixedDataSize = n163Banked ? fixedprgsize : (mmc3Banked ? 0x15c : 0x150);
-        const int firstMusicBank = vrc6Banked ? 0 : 1;
+        const int firstMusicBank = vrc6Banked ? 0 : (vrc7Banked ? 2 : 1);
         const int fixedcodesize = vrc6Banked ? 0 : musicbanksize;
 
         if (drvsize > musicbanksize)
@@ -629,6 +636,79 @@ void FileWriter::createNes()
         {
             ofs.write(reinterpret_cast<const char*>(bank.data()), bank.size());
         };
+
+        if (vrc7Banked)
+        {
+            const int musicSlotCount = 28;
+            if (nextAdditionalBank > firstMusicBank + musicSlotCount)
+            {
+                std::cerr << "DSP PRG bank count has reached mapper maximum." << std::endl;
+                exit(1);
+            }
+            neshead[0x04] = 0x10;
+            for (const auto& h : neshead)
+            {
+                ofs.write(&h, sizeof(char));
+            }
+
+            std::vector<unsigned char> dspBank(musicbanksize, 0);
+            ifs.read(reinterpret_cast<char*>(dspBank.data()), dspBank.size());
+            if (ifs.gcount() != dspBank.size())
+            {
+                std::cerr << "Invalid VRC7 DSP display driver." << std::endl;
+                exit(1);
+            }
+            writeBank(dspBank);
+
+            std::vector<unsigned char> padding(musicbanksize, 0);
+            writeBank(padding); // Bank 1 is reserved; DSP song requests start at bank 2.
+            int writtenSlots = 0;
+            auto writeVrc7Music = [&](const std::vector<unsigned char>& bank)
+            {
+                writeBank(bank);
+                writtenSlots++;
+            };
+            for (const auto& banks : musicbanks)
+            {
+                writeVrc7Music(banks.first);
+            }
+            for (const auto& banks : musicbanks)
+            {
+                for (const auto& bank : banks.additional)
+                {
+                    writeVrc7Music(bank);
+                }
+            }
+            while (writtenSlots < musicSlotCount)
+            {
+                writeBank(padding);
+                writtenSlots++;
+            }
+
+            auto dpcmdata = loadDpcmData(musicbanksize);
+            writeBank(dpcmdata);
+
+            std::vector<unsigned char> fixedData;
+            std::ifstream ifsc(data, std::ifstream::in | std::ifstream::binary);
+            while (ifsc.read(&c, sizeof(char)))
+            {
+                fixedData.push_back(static_cast<unsigned char>(c));
+            }
+            if (fixedData.size() < fixedprgsize)
+            {
+                std::cerr << "Invalid VRC7 DSP fixed driver." << std::endl;
+                exit(1);
+            }
+            ofs.write(reinterpret_cast<const char*>(fixedData.data()), fixedprgsize);
+            ofs.write(reinterpret_cast<const char*>(fixedData.data() + fixedprgsize), fixedData.size() - fixedprgsize);
+            if (!ofs)
+            {
+                std::cerr << "Faild to write file." << std::endl;
+                exit(1);
+            }
+            ofs.close();
+            return;
+        }
 
         if (vrc6Banked)
         {

@@ -84,7 +84,7 @@ CH3 = CH2 + 20
 CH4 = CH3 + 4
 CH5 = CH4 + 20
 EXP1 = CH5 + 4
-.ifdef N163
+.if .defined(N163) .or .defined(VRC7)
 CPU = EXP1 + 48
 .else
 CPU = EXP1 + 28
@@ -115,7 +115,7 @@ CH5KEY		=	DMA + CH5 + 0
 EXP1KEY = DMA + EXP1 + 0
 EXP2KEY = DMA + EXP1 + 4
 EXP3KEY = DMA + EXP1 + 8
-.ifdef N163
+.if .defined(N163) .or .defined(VRC7)
 EXP4KEY = DMA + EXP1 + 12
 EXP5KEY = DMA + EXP1 + 16
 EXP6KEY = DMA + EXP1 + 20
@@ -142,7 +142,7 @@ YPOS5 = $9f
 YPOS_EXP = $6f
 YPOS_CPU = $bf
 
-.ifdef N163
+.if .defined(N163) .or .defined(VRC7)
 .segment "DSPCODE"
 .else
 .code
@@ -671,6 +671,65 @@ YPOS_CPU = $bf
 		sta ExpVolume
 .endif
 
+.ifdef VRC7
+	;---------------VRC7 ch1-6---------------
+		lda #0
+		sta ExpVolume
+		sta DspWork + 8
+	@vrc7_loop:
+		ldx DspWork + 8
+		lda vrc7_dsp_channel, x
+		sta DspWork + 9
+		txa
+		clc
+		adc #DEV_VRC7_CH1
+		tax
+		lda ActTbl, x
+		tax
+		cmp #$ff
+		beq @vrc7_keyoff
+		lda Frags, x
+		and #FRAG_IS_KEYON
+		beq @vrc7_keyoff
+		lda Volume, x
+		beq @vrc7_keyoff
+		jsr freq2note_vrc7
+		ldy DspWork + 9
+		jsr draw_note
+		lda Volume, x
+		clc
+		adc ExpVolume
+		sta ExpVolume
+		jmp @vrc7_next
+	@vrc7_keyoff:
+		ldx DspWork + 9
+		ldy note_oam_offset, x
+		lda #$ff
+		sta CH1KEY + 0, y
+	@vrc7_next:
+		inc DspWork + 8
+		lda DspWork + 8
+		cmp #6
+		bcc @vrc7_loop
+
+		lda ExpVolume
+		lsr
+		clc
+		adc #$b8
+		sta EXPVOL1 + 3
+		clc
+		adc #8
+		sta EXPVOL2 + 3
+		clc
+		adc #8
+		sta EXPVOL3 + 3
+		clc
+		adc #8
+		sta EXPVOL4 + 3
+		lda #0
+		sta ExpVolume
+.endif
+
 .ifdef N163
 	;---------------N163 ch1---------------
 	n163_01:
@@ -1136,6 +1195,10 @@ note_octave_shift:
 	.byte	0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0
 note_palette:
 	.byte	0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0
+.ifdef VRC7
+vrc7_dsp_channel:
+	.byte	3, 4, 5, 7, 8, 9
+.endif
 
 
 .proc dsp_write
@@ -1540,6 +1603,26 @@ note_palette:
 		sta $2007
 .endif
 
+.ifdef VRC7
+		lda #$76
+		sta $2007
+		lda #$77
+		sta $2007
+		lda #$78
+		sta $2007
+		lda #$21
+		sta $2006
+		lda #$f6
+		sta $2006
+		lda #$28
+		sta $2007
+		lda #$29
+		sta $2007
+		sta $2007
+		sta $2007
+		sta $2007
+.endif
+
 .ifdef MMC5
 		lda #$66
 		sta $2007
@@ -1883,6 +1966,34 @@ note_palette:
 		sta EXPVOL4 + 3
 		lda #%00000001
 		sta EXP3KEY + 2
+.endif
+
+.ifdef VRC7
+		lda #$ff
+		sta EXP1KEY + 0
+		sta EXP2KEY + 0
+		sta EXP3KEY + 0
+		sta EXP4KEY + 0
+		sta EXP5KEY + 0
+		sta EXP6KEY + 0
+		lda #YPOS_EXP
+		sta EXPVOL1 + 0
+		sta EXPVOL2 + 0
+		sta EXPVOL3 + 0
+		sta EXPVOL4 + 0
+		lda #$02
+		sta EXPVOL1 + 1
+		sta EXPVOL2 + 1
+		sta EXPVOL3 + 1
+		sta EXPVOL4 + 1
+		lda #$b8
+		sta EXPVOL1 + 3
+		lda #$c0
+		sta EXPVOL2 + 3
+		lda #$c8
+		sta EXPVOL3 + 3
+		lda #$d0
+		sta EXPVOL4 + 3
 .endif
 
 .ifdef MMC5
@@ -2238,6 +2349,46 @@ note_palette:
 .endproc
 .endif
 
+.ifdef VRC7
+.proc freq2note_vrc7
+		lda Freq_H, x
+		and #$0e
+		lsr
+		sta DspWork + 2
+		lda Freq_L, x
+		sta DspWork
+		lda Freq_H, x
+		and #$01
+		sta DspWork + 1
+		lda #0
+		sta DspWork + 3
+		ldy #0
+	@threshold:
+		lda DspWork + 1
+		cmp Freq_VRC7_Mid + 1, y
+		bcc @found
+		bne @next
+		lda DspWork
+		cmp Freq_VRC7_Mid, y
+		bcc @found
+	@next:
+		iny
+		iny
+		inc DspWork + 3
+		lda DspWork + 3
+		cmp #12
+		bcc @threshold
+		lda #0
+		sta DspWork + 3
+		lda DspWork + 2
+		cmp #7
+		bcs @found
+		inc DspWork + 2
+	@found:
+		rts
+.endproc
+.endif
+
 .ifdef SS5B
 .proc freq2note_ss5b
 		lda Freq_L, x
@@ -2565,6 +2716,12 @@ Freq_Note_Saw:
 Freq_Note_Saw_H:
 	.byte	$0b, $0a, $09, $08, $07, $06, $05, $05
 	.byte	$04, $03, $03, $02, $01, $01, $00, $00
+.endif
+
+.ifdef VRC7
+Freq_VRC7_Mid:
+	.word	177, 187, 199, 211, 223, 237
+	.word	251, 266, 282, 298, 316, 335
 .endif
 
 ;o0c~o0bまでのレジスタ値から音階を引ける
