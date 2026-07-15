@@ -3842,33 +3842,33 @@ Vol_Tbl:
 
 
 Freq_Tbl:
-	.word	$1a7f
-	.word	$18ff
-	.word	$177f
-	.word	$163d
-	.word	$14f9
-	.word	$13de
-	.word	$12bd
-	.word	$11bf
-	.word	$10be
-	.word	$0fbb
-	.word	$0ed7
-	.word	$0df6
+	.word	$1ab7
+	.word	$1937
+	.word	$17cd
+	.word	$1677
+	.word	$152f
+	.word	$13ff
+	.word	$12df
+	.word	$11cf
+	.word	$10cf
+	.word	$0fdf
+	.word	$0efe
+	.word	$0e1f
 
 .ifdef VRC6
 Freq_Saw:
-	.word	$1e6c
-	.word	$1ca2
-	.word	$1b18
-	.word	$1991
-	.word	$1815
-	.word	$16ba
-	.word	$1584
-	.word	$144f
-	.word	$1315
-	.word	$1214
-	.word	$1110
-	.word	$1010
+	.word	$1e87
+	.word	$1ccf
+	.word	$1b2f
+	.word	$19ad
+	.word	$183b
+	.word	$16df
+	.word	$1597
+	.word	$145f
+	.word	$133b
+	.word	$1227
+	.word	$111f
+	.word	$102d
 .endif
 
 .ifdef VRC7
@@ -3879,18 +3879,18 @@ Freq_VRC7:
 
 .ifdef SS5B
 Freq_5B:
-	.word	$1ab9
-	.word	$1935
-	.word	$17ce
-	.word	$1675
-	.word	$1531
-	.word	$1402
-	.word	$12e1
-	.word	$11d4
-	.word	$10d3
-	.word	$0fdf
-	.word	$0efc
-	.word	$0e24
+	.word	$1ac0
+	.word	$1940
+	.word	$17d0
+	.word	$1680
+	.word	$1540
+	.word	$1404
+	.word	$12e8
+	.word	$11e0
+	.word	$10e0
+	.word	$0fe4
+	.word	$0f00
+	.word	$0e28
 .endif
 
 .ifdef N163
@@ -3924,16 +3924,16 @@ Freq_N163_6:
 
 .ifdef FDS
 Freq_FDS:
-	.word	$09a4
-	.word	$0a36
-	.word	$0ad1
-	.word	$0b74
-	.word	$0c22
-	.word	$0cda
-	.word	$0d9c
-	.word	$0e6b
-	.word	$0f45
-	.word	$102d
-	.word	$1122
-	.word	$1226
+	.word	$0994
+	.word	$0a26
+	.word	$0ac1
+	.word	$0b64
+	.word	$0c12
+	.word	$0cca
+	.word	$0d8c
+	.word	$0e5b
+	.word	$0f35
+	.word	$101d
+	.word	$1112
+	.word	$1216
 .endif
