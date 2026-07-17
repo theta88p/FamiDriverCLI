@@ -350,3 +350,4 @@ errlog.txt
 *.lst
 *.nes
 /Driver/a.out
+/AGENTS.md
