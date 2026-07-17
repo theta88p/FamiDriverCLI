@@ -93,7 +93,7 @@
       <AdditionalDependencies>Version.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>cmd $(SolutionDir)drv\_re-build.bat</Command>
+      <Command>cmd /c call "$(SolutionDir)Driver\_build.bat"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

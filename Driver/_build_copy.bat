@@ -2,7 +2,7 @@ cd "%~dp0"
 
 set MSYS_HOME=c:\msys64
 set CC65_HOME=c:\cc65
-set PATH=%CC65_HOME%\bin;%MSYS_HOME%\usr\bin
+set "PATH=%CC65_HOME%\bin;%MSYS_HOME%\usr\bin;%PATH%"
 set DBG_DIR=..\Compiler\bin\Debug\bin
 set REL_DIR=..\Compiler\bin\Release\bin
 set WS_DBG_DIR=..\..\FamiDriver\FamiDriver\bin\x64\Debug\net10.0-windows7.0\bin
