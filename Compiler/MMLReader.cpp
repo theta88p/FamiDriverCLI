@@ -1,5 +1,7 @@
 #include "MMLReader.h"
 
+#include <numeric>
+
 //ノートテーブル（ノート文字と音階の関係）
                       /* a b  c d e f g */
 const unsigned char notetbl[] = { 9, 11, 0, 2, 4, 5, 7 };
@@ -1884,6 +1886,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     int volume = 15;
     int octave = 4;
     int grace = 0;
+    long long lengthError = 0;
+    long long lengthErrorScale = 192;
     int loopmid_volume = 15;
 	int loopmid_octave = 4;
     int loopmid_tone = 0;
@@ -1903,6 +1907,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     int pdvol = 0;
     int pdlen = 0;
     int shorten = 0;
+    bool deflenIsFrames = false;
     int usingNoteMap = -1;
     std::map<Command, CommandArgs> usingCmds;
     std::vector<TrackData> tracks;
@@ -2376,7 +2381,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (map.commands.count(REST_DEFLEN))   //休符コマンドが入っていた場合
                 {
                     skipSpace();
-                    calcLength(REST_DEFLEN, data, lengthtbl, grace, 0, preserveDefaultRest);
+                    calcLength(REST_DEFLEN, data, lengthtbl, grace, 0, lengthError, lengthErrorScale, deflenIsFrames, preserveDefaultRest);
                 }
                 else
                 {
@@ -2395,7 +2400,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
 
                     skipSpace();
-                    calcLength(newNN, data, lengthtbl, grace, 0);
+                    calcLength(newNN, data, lengthtbl, grace, 0, lengthError, lengthErrorScale, deflenIsFrames);
                 }
             }
             else
@@ -2428,7 +2433,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         prevnotes.pop();
                     }
 
-                    calcLength(nn, data, lengthtbl, grace, pdlen);
+                    calcLength(nn, data, lengthtbl, grace, pdlen, lengthError, lengthErrorScale, deflenIsFrames);
 
                     if (pdvol < 0)
                     {
@@ -2474,7 +2479,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 }
                 else
                 {
-                    calcLength(nn, data, lengthtbl, grace, 0);
+                    calcLength(nn, data, lengthtbl, grace, 0, lengthError, lengthErrorScale, deflenIsFrames);
                 }
                 prevnotes.push(nn);
             }
@@ -2495,7 +2500,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     prevnotes.pop();
                 }
 
-                calcLength(REST_DEFLEN, data, lengthtbl, grace, pdlen, preserveDefaultRest);
+                calcLength(REST_DEFLEN, data, lengthtbl, grace, pdlen, lengthError, lengthErrorScale, deflenIsFrames, preserveDefaultRest);
 
                 if (pdvol > 0)
                 {
@@ -2537,7 +2542,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             }
             else
             {
-                calcLength(REST_DEFLEN, data, lengthtbl, grace, 0, preserveDefaultRest);
+                calcLength(REST_DEFLEN, data, lengthtbl, grace, 0, lengthError, lengthErrorScale, deflenIsFrames, preserveDefaultRest);
             }
             prevnotes.push(REST_DEFLEN);
             break;
@@ -3060,6 +3065,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             if (getMultiDigit(n))
             {
                 deflen = n;
+                deflenIsFrames = false;
                 for (int i = 0, size = (int)sizeof(nthnotetbl); i < size; i++)
                 {
                     if (deflen == nthnotetbl[i])
@@ -3076,6 +3082,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 if (getMultiDigit(n))
                 {
                     deflen = n;
+                    deflenIsFrames = true;
                     data.push_back(DEF_LENGTH);
                     data.push_back(n);
                 }
@@ -3189,6 +3196,9 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         tracks.push_back(tr);
                         data.clear();
                         deflen = 4;
+                        deflenIsFrames = false;
+                        lengthError = 0;
+                        lengthErrorScale = 192;
                         dpcmToneSpecified = false;
                         dpcmDefaultRequired = false;
                         fdsToneSpecified = false;
@@ -3251,31 +3261,32 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     std::cerr << "Line " << linenum << " : Prease write the tempo in the track." << std::endl;
                     exit(1);
                 }
-                int tempo = 14400 / timebase;
-                int fskip = 256 - 256 * n / tempo;
+                constexpr int TEMPO_DENOMINATOR = 14400;
+                long long tickRateNumerator = static_cast<long long>(n) * timebase;
+                long long tempoStep;
                 int dir;
 
-                if (fskip > 0)
+                if (tickRateNumerator < TEMPO_DENOMINATOR)
                 {
                     dir = 0;
+                    tempoStep = TEMPO_DENOMINATOR - tickRateNumerator;
                 }
                 else
                 {
                     dir = 1;
-                    fskip = -fskip;
-                    //std::cerr << "Line " << linenum << " : Max tempo is " << tempo << std::endl;
-                    //std::cerr << "Please reduce timebase." << std::endl;
-                    //exit(1);
+                    tempoStep = tickRateNumerator - TEMPO_DENOMINATOR;
                 }
 
-                if (fskip > 255)
+                // The driver supports from 0 to 2 ticks per video frame.
+                if (tempoStep > TEMPO_DENOMINATOR)
                 {
-                    fskip = 255;
+                    tempoStep = TEMPO_DENOMINATOR;
                 }
 
                 data.push_back(TEMPO);
                 data.push_back(dir);
-                data.push_back(fskip);
+                data.push_back(tempoStep & 0xff);
+                data.push_back((tempoStep >> 8) & 0xff);
             }
             break;
         case 's':   //ソフトウェアスイープ
@@ -4023,18 +4034,41 @@ bool MMLReader::getByte(int& res)
 }
 
 
-void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vector<unsigned char> lengthtbl, int& prevGrace, int shorten, bool preserveDefaultRest)
+void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vector<unsigned char> lengthtbl, int& prevGrace, int shorten,
+    long long& lengthError, long long& lengthErrorScale, bool deflenIsFrames, bool preserveDefaultRest)
 {
     char c;
     int n = 0;
     int frames = 0;
-    int dottedlen = 0;
+    int dottedDenominator = 0;
     bool dotted = false;
     bool envdis = false;
     bool framelen = false;
     bool grace = false;
     bool joinedRest = false;
+    int lengthCorrection = 0;
     std::string digit;
+
+    auto calcNthLength = [&](int denominator)
+    {
+        int length = timebase / denominator;
+        int remainder = timebase % denominator;
+
+        // Extend the common scale when dots introduce denominators such as
+        // 128 or 256, which do not divide the base scale of 192.
+        long long commonScale = std::lcm(lengthErrorScale, static_cast<long long>(denominator));
+        lengthError *= commonScale / lengthErrorScale;
+        lengthError += remainder * (commonScale / denominator);
+        lengthCorrection += static_cast<int>(lengthError / commonScale);
+        lengthError %= commonScale;
+        lengthErrorScale = commonScale;
+
+        long long divisor = std::gcd(lengthError, lengthErrorScale);
+        lengthError /= divisor;
+        lengthErrorScale /= divisor;
+
+        return length;
+    };
 
     auto nextRestHasExplicitLength = [&]()
     {
@@ -4097,12 +4131,12 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
                     else if (digit.empty())
                     {
                         frames += n;
-                        frames += timebase / deflen;
+                        frames += calcNthLength(deflen);
                     }
                     else
                     {
                         frames += n;
-                        frames += timebase / std::atoi(digit.c_str());
+                        frames += calcNthLength(std::atoi(digit.c_str()));
                     }
                 }
                 ss.seekg((int)ss.tellg() - 1);
@@ -4116,14 +4150,14 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
             else if (digit.empty())    //前に数値がない場合デフォ音長
             {
                 frames += n;
-                frames += timebase / deflen;
+                frames += calcNthLength(deflen);
             }
             else
             {
                 frames += n;
-                frames += timebase / std::atoi(digit.c_str());
+                frames += calcNthLength(std::atoi(digit.c_str()));
             }
-            dottedlen = 0;
+            dottedDenominator = 0;
             dotted = false;
             digit.clear();
             n = 0;
@@ -4133,20 +4167,21 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
         {
             if (dotted)        //多重付点
             {
-                dottedlen /= 2;
-                n += dottedlen;
+                dottedDenominator *= 2;
+                n += calcNthLength(dottedDenominator);
             }
             else if (digit.empty())    //前に数値がない場合デフォ音長
             {
-                n = timebase / deflen;
-                dottedlen = n / 2;
-                n += dottedlen;
+                n = calcNthLength(deflen);
+                dottedDenominator = deflen * 2;
+                n += calcNthLength(dottedDenominator);
             }
             else
             {
-                n = timebase / std::atoi(digit.c_str());
-                dottedlen = n / 2;
-                n += dottedlen;
+                int denominator = std::atoi(digit.c_str());
+                n = calcNthLength(denominator);
+                dottedDenominator = denominator * 2;
+                n += calcNthLength(dottedDenominator);
             }
             dotted = true;
             digit.clear();
@@ -4183,13 +4218,13 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
                 }
                 else
                 {
-                    n += timebase / std::atoi(digit.c_str());
+                    n += calcNthLength(std::atoi(digit.c_str()));
                 }
             }
             frames += n;
             if (joinedRest && digit.empty() && n == 0 && !dotted && !framelen)
             {
-                frames += timebase / deflen;
+                frames += calcNthLength(deflen);
             }
             ss.seekg((int)ss.tellg() - 1);    //読み込み位置を戻す
             break;
@@ -4204,6 +4239,19 @@ void MMLReader::calcLength(char cmd, std::vector<unsigned char>& data, std::vect
     {
         data.push_back(0xf8);
     }
+
+    // A note without an explicit length is normally emitted using the current
+    // default-length command. Emit an explicit length only when accumulated
+    // error adds a tick; otherwise preserve the compact existing encoding.
+    if (frames == 0 && !framelen && !deflenIsFrames)
+    {
+        int defaultLength = calcNthLength(deflen);
+        if (lengthCorrection > 0)
+        {
+            frames = defaultLength;
+        }
+    }
+    frames += lengthCorrection;
 
     if (prevGrace > 0)     //前の音符が装飾符
     {

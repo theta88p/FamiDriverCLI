@@ -21,6 +21,8 @@
 
 .include	"drv.inc"
 
+TEMPO_DENOMINATOR = 14400
+
 ;-----------------------------------------------------------------------
 ; Zeropage works
 ;-----------------------------------------------------------------------
@@ -102,8 +104,10 @@ LoopAddr_H:	.res	MAX_TRACK * MAX_LOOP	;ループの戻り先H
 
 ActTbl:			.res	MAX_DEVICE	;デバイス番号から発音中トラックを引くテーブル
 DrvFrags:		.res	1	;ドライバ全体のフラグ
-SpdCtr:			.res	1	;速度カウンタ
-SpdFreq:		.res	1	;速度カウンタに加算する値
+SpdCtr_L:		.res	1	;速度カウンタ下位
+SpdCtr_H:		.res	1	;速度カウンタ上位
+SpdFreq_L:		.res	1	;速度カウンタに加算する値下位
+SpdFreq_H:		.res	1	;速度カウンタに加算する値上位
 ProcTr:			.res	1	;処理中のトラック
 SeqAddr_L:		.res	1	;シーケンス情報のアドレスL
 SeqAddr_H:		.res	1	;シーケンス情報のアドレスH
@@ -152,7 +156,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ;72	:Kx		キーシフト絶対指定
 ;73	:&		次の音がタイ・スラーになる
 ;74	:@x		音色指定
-;75	:tx		フレームスキップ値。コンパイラでテンポから計算
+;75	:tx		フレームスキップ方向と16bit加算値。コンパイラでテンポから計算
 ;76 :@p		指定した曲番号のデータを再生
 ;77	:@vx	音量エンベロープ指定（外部定義）
 ;78 :@v*	音量エンベロープ停止
@@ -190,6 +194,54 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ; ------------------------------------------------------------------------
 .code
 
+.proc update_speed_counter
+		clc
+		lda SpdCtr_L
+		adc SpdFreq_L
+		sta SpdCtr_L
+		lda SpdCtr_H
+		adc SpdFreq_H
+		sta SpdCtr_H
+
+		cmp #>TEMPO_DENOMINATOR
+		bcc @below
+		bne @subtract
+		lda SpdCtr_L
+		cmp #<TEMPO_DENOMINATOR
+		bcc @below
+
+	@subtract:
+		sec
+		lda SpdCtr_L
+		sbc #<TEMPO_DENOMINATOR
+		sta SpdCtr_L
+		lda SpdCtr_H
+		sbc #>TEMPO_DENOMINATOR
+		sta SpdCtr_H
+		sec
+		rts
+
+	@below:
+		clc
+		rts
+.endproc
+
+.proc reverse_speed_counter
+		lda SpdCtr_L
+		ora SpdCtr_H
+		beq @exit
+
+		sec
+		lda #<TEMPO_DENOMINATOR
+		sbc SpdCtr_L
+		sta SpdCtr_L
+		lda #>TEMPO_DENOMINATOR
+		sbc SpdCtr_H
+		sta SpdCtr_H
+	@exit:
+		rts
+.endproc
+
 .proc drv_main
 		lda DrvFrags
 		and #DRV_IS_FREE_CLR
@@ -199,18 +251,12 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda DrvFrags
 		and #DRV_SKIP_DIR
 		bne acc
-		lda SpdCtr		;減速の場合
-		clc
-		adc SpdFreq
-		sta SpdCtr
-		bcs env			;SpdFreqを足していって桁上がりしたらスキップ
+		jsr update_speed_counter	;減速の場合
+		bcs env			;14400以上になったらスキップ
 		bcc single
 	acc:
-		lda SpdCtr		;加速の場合
-		clc
-		adc SpdFreq
-		sta SpdCtr
-		bcc single		;桁上がりしたら二重処理
+		jsr update_speed_counter	;加速の場合
+		bcc single		;14400以上になったら二重処理
 		ldx LastTrack
 		jsr track		;トラック処理
 		ldx LastTrack
@@ -295,8 +341,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 .endif
 		lda #0
 		sta ProcTr
-		sta SpdFreq
-		sta SpdCtr
+		sta SpdFreq_L
+		sta SpdFreq_H
+		sta SpdCtr_L
+		sta SpdCtr_H
 		.if .defined(MMC3) .or .defined(VRC6) .or .defined(VRC7) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
 		lda #2
 		.else
@@ -847,22 +895,35 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		jsr addptr
 		rts
 		
-	tempo:					;フレームスキップ加算値（テンポ）
+	tempo:					;フレームスキップ方向と16bit加算値（テンポ）
 		ldy #1
 		lda (Work), y
 		beq @dec
 		lda DrvFrags
+		and #DRV_SKIP_DIR
+		bne @set_acc
+		jsr reverse_speed_counter
+	@set_acc:
+		lda DrvFrags
 		ora #DRV_SKIP_DIR
 		jmp @next
 	@dec:
+		lda DrvFrags
+		and #DRV_SKIP_DIR
+		beq @set_dec
+		jsr reverse_speed_counter
+	@set_dec:
 		lda DrvFrags
 		and #DRV_SKIP_DIR_CLR
 	@next:
 		sta DrvFrags
 		ldy #2
 		lda (Work), y
-		sta SpdFreq
-		lda #3
+		sta SpdFreq_L
+		iny
+		lda (Work), y
+		sta SpdFreq_H
+		lda #4
 		jsr addptr
 		rts
 		
