@@ -1379,6 +1379,7 @@ vrc7_dsp_channel:
 		dex
 		bne :-
 		ldx DspWork
+		beq end
 	:	lda #$02
 		sta $2007
 		dex
