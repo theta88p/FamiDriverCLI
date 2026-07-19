@@ -2720,6 +2720,15 @@ sw_sweep_delay_table:
 		dec Work + 8
 		bne @shift_loop
 	@add:
+.ifdef VRC7
+		lda Device, x
+		cmp #DEV_VRC7_CH1
+		bcc @add_linear
+		cmp #DEV_VRC7_CH6 + 1
+		bcs @add_linear
+		jmp @add_vrc7
+.endif
+	@add_linear:
 		clc
 		lda Freq_L, x
 		adc Work + 5	;周波数に加算
@@ -2730,6 +2739,86 @@ sw_sweep_delay_table:
 		lda Freq_X, x
 		adc Work + 7
 		sta Freq_X, x
+.ifdef VRC7
+		jmp frame
+
+	;VRC7はF-Number上位bitの次がBlockなので、単純な桁上がりでは
+	;F-Numberが0に戻る。加算後のF-Numberを256～511へ正規化する。
+	@add_vrc7:
+		lda Freq_L, x
+		sta Work + 2
+		lda Freq_H, x
+		and #$01
+		sta Work + 3
+		lda #0
+		sta Work + 4
+		clc
+		lda Work + 2
+		adc Work + 5
+		sta Work + 2
+		lda Work + 3
+		adc Work + 6
+		sta Work + 3
+		lda Work + 4
+		adc Work + 7
+		sta Work + 4
+		bmi @vrc7_min
+		lda Freq_H, x
+		lsr
+		and #$07
+		sta Work + 8		;Block
+	@vrc7_shrink:
+		lda Work + 4
+		bne @vrc7_shift_right
+		lda Work + 3
+		cmp #2
+		bcc @vrc7_expand
+	@vrc7_shift_right:
+		lda Work + 8
+		cmp #7
+		bcs @vrc7_max
+		lsr Work + 4
+		ror Work + 3
+		ror Work + 2
+		inc Work + 8
+		jmp @vrc7_shrink
+	@vrc7_expand:
+		lda Work + 3
+		bne @vrc7_encode
+		lda Work + 8
+		beq @vrc7_encode
+		asl Work + 2
+		rol Work + 3
+		rol Work + 4
+		dec Work + 8
+		jmp @vrc7_expand
+	@vrc7_encode:
+		lda Work + 2
+		sta Freq_L, x
+		lda Work + 8
+		asl
+		sta Work + 2
+		lda Work + 3
+		and #$01
+		ora Work + 2
+		sta Freq_H, x
+		lda #0
+		sta Freq_X, x
+		jmp frame
+	@vrc7_min:
+		lda #0
+		sta Freq_L, x
+		sta Freq_H, x
+		sta Freq_X, x
+		jmp frame
+	@vrc7_max:
+		lda #$ff
+		sta Freq_L, x
+		lda #$0f
+		sta Freq_H, x
+		lda #0
+		sta Freq_X, x
+.endif
 	frame:
 		lda FEnvCtr, x
 		cmp #2
