@@ -1846,10 +1846,7 @@ vrc7_dsp_channel:
 		sta $2007
 		sta $2007
 		lda #$55
-		sta $2007
-		
-		lda #$aa
-		ldx #$08
+		ldx #$09
 	:	sta $2007
 		dex
 		bne :-
