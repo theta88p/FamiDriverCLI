@@ -1,4 +1,4 @@
-;FamiDriverCLI FCDSP v1.0.0
+;FamiDriverCLI FCDSP v1.0.1
 
 .importzp	Frags
 .import		DrvFrags
