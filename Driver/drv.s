@@ -264,9 +264,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		jsr update_speed_counter	;加速の場合
 		bcc single		;14400以上になったら二重処理
 		ldx LastTrack
-		jsr track		;トラック処理
-		ldx LastTrack
-		jsr envelope
+		jsr track		;トラック・エンベロープ処理
 		ldx LastTrack
 		jsr writereg	;書き込みも2回しないとDPCMが発音しないタイミングがある
 		ldx LastTrack
@@ -276,10 +274,8 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta DrvFrags
 	single:
 		ldx LastTrack
-		jsr track		;トラック処理
-	env:
-		ldx LastTrack	;エンベロープと書き込み処理は毎フレームやる
-		jsr envelope
+		jsr track		;トラック・エンベロープ処理
+	write:
 		ldx LastTrack
 		jsr writereg
 		lda DrvFrags
@@ -288,6 +284,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta DrvFrags
 	exit:
 		rts
+	env:
+		ldx LastTrack	;減速スキップ時もエンベロープと書き込み処理は毎フレームやる
+		jsr envelope
+		jmp write
 .endproc
 
 ;ドライバ初期化
@@ -645,6 +645,108 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ; ------------------------------------------------------------------------
 ; トラック処理
 ; ------------------------------------------------------------------------
+.macro process_envelope loop_label, long_loop
+	.local vol, ld0, ld63, store, calc, next, exit, load, n0, n1, n2, n3, n4, tovol
+		lda Device, x
+		cmp #$ff
+		beq next				;未使用トラックは処理しない
+		lda Frags, x
+		and #FRAG_END
+		bne next				;終了フラグが立っていたら処理しない
+		stx ProcTr
+		lda EnvFrags, x
+		and #FRAG_ENV_DIS
+		beq load				;エンベロープ無効フラグが立っていなければエンベロープ処理へ
+	vol:
+		lda Device, x
+		cmp #DEV_2A03_DPCM	;DPCMは音量計算しない
+		beq next
+.ifdef VRC7
+		cmp #DEV_VRC7_CH1
+		bcc :+
+		cmp #DEV_VRC7_CH6 + 1
+		bcs :+
+		lda #15			;VRC7のキーオフはハードウェアのリリースに任せる
+		jmp store			;明示的なトラックボリュームはcalc_volumeで反映
+	:
+.endif
+		lda Frags, x
+		and #FRAG_IS_KEYON	;キーオフされていたら無音に
+		beq ld0				;それ以外は最大値をロード
+		lda Device, x
+		cmp #DEV_VRC6_SAW
+		beq ld63
+		cmp #DEV_FDS
+		beq ld63
+		lda #15
+		jmp store
+	ld0:
+		lda #0
+		jmp store
+	ld63:
+		lda #63
+	store:
+		sta Volume, x
+	calc:
+		jsr calc_volume
+	next:
+		dex
+	.if long_loop
+		bmi exit
+		jmp loop_label
+	exit:
+	.else
+		bpl loop_label
+	.endif
+		rts
+	load:
+		lda RefFreq_L, x
+		sta Freq_L, x
+		lda RefFreq_H, x
+		sta Freq_H, x
+		lda RefFreq_X, x
+		sta Freq_X, x
+	n0:
+		lda EnvFrags, x
+		and #FRAG_NENV
+		beq n1
+		jsr noteenv
+		lda NoteN, x
+		jsr calcfreq
+		lda Work + 2
+		sta Freq_L, x
+		sta RefFreq_L, x
+		lda Work + 3
+		sta Freq_H, x
+		sta RefFreq_H, x
+		lda Work + 4
+		sta Freq_X, x
+		sta RefFreq_X, x
+	n1:
+		lda EnvFrags, x
+		and #FRAG_SSWP
+		beq n2
+		jsr ssweep
+	n2:
+		lda EnvFrags, x
+		and #FRAG_FENV
+		beq n3
+		jsr freqenv
+	n3:
+		lda EnvFrags, x
+		and #FRAG_TENV
+		beq n4
+		jsr toneenv
+	n4:
+		lda EnvFrags, x
+		and #FRAG_VENV
+		beq tovol
+		jsr volenv
+		jmp calc
+	tovol:
+		jmp vol
+.endmacro
+
 .proc track
 	start:
 		.ifndef FLAT_TRACK_DATA
@@ -652,7 +754,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		.endif
 		lda Frags, x
 		and #FRAG_END
-		bne next		;終了フラグが立っていなければ処理へ
+		bne envelope		;終了フラグが立っていたらエンベロープ処理へ
 		stx ProcTr
 		lda LenCtr, x
 		cmp #1
@@ -675,12 +777,12 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta Frags, x		;キーオフしたらカウントして終了
 	cnt:
 		lda LenCtr, x
-		beq next
+		beq envelope
 		dec LenCtr, x
 		lda GateCtr, x
-		beq next
+		beq envelope
 		dec GateCtr, x
-		jmp next
+		jmp envelope
 	seq:
 		jsr loadseq
 		lda Frags, x
@@ -688,12 +790,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		bne seq
 		lda Frags, x
 		and #FRAG_END
-		bne next			;終了フラグが立っていなければ処理へ
+		bne envelope			;終了フラグが立っていたらエンベロープ処理へ
 		jsr procnote
-	next:
-		dex
-		bpl start
-		rts
+	envelope:
+		process_envelope start, 1
 .endproc
 
 
@@ -1912,98 +2012,7 @@ sw_sweep_delay_table:
 		.ifndef FLAT_TRACK_DATA
 		jsr select_track_bank
 		.endif
-		lda Device, x
-		cmp #$ff
-		beq next			;未使用トラックは処理しない
-		lda Frags, x
-		and #FRAG_END
-		bne next		;終了フラグが立っていなければ処理へ
-		stx ProcTr
-		lda EnvFrags, x
-		and #FRAG_ENV_DIS
-		beq load				;エンベロープ無効フラグが立っていたら音量処理へ
-	vol:
-		lda Device, x
-		cmp #DEV_2A03_DPCM	;DPCMは音量計算しない
-		beq next
-.ifdef VRC7
-		cmp #DEV_VRC7_CH1
-		bcc :+
-		cmp #DEV_VRC7_CH6 + 1
-		bcs :+
-		lda #15			;VRC7のキーオフはハードウェアのリリースに任せる
-		jmp store			;明示的なトラックボリュームはcalc_volumeで反映
-	:
-.endif
-		lda Frags, x
-		and #FRAG_IS_KEYON	;キーオフされていたら無音に
-		beq ld0				;それ以外は最大値をロード
-		lda Device, x
-		cmp #DEV_VRC6_SAW
-		beq ld63
-		cmp #DEV_FDS
-		beq ld63
-		lda #15
-		jmp store
-	ld0:
-		lda #0
-		jmp store
-	ld63:
-		lda #63
-	store:
-		sta Volume, x
-	calc:
-		jsr calc_volume
-	next:
-		dex
-		bpl start			;xがマイナスになったら全トラック終了
-		rts
-	load:
-		lda RefFreq_L, x
-		sta Freq_L, x
-		lda RefFreq_H, x
-		sta Freq_H, x
-		lda RefFreq_X, x
-		sta Freq_X, x
-	@N0:
-		lda EnvFrags, x
-		and #FRAG_NENV
-		beq @N1
-		jsr noteenv
-		lda NoteN, x
-		jsr calcfreq
-		lda Work + 2
-		sta Freq_L, x
-		sta RefFreq_L, x
-		lda Work + 3
-		sta Freq_H, x
-		sta RefFreq_H, x
-		lda Work + 4
-		sta Freq_X, x
-		sta RefFreq_X, x
-	@N1:
-		lda EnvFrags, x
-		and #FRAG_SSWP
-		beq @N2
-		jsr ssweep
-	@N2:
-		lda EnvFrags, x
-		and #FRAG_FENV
-		beq @N3
-		jsr freqenv
-	@N3:
-		lda EnvFrags, x
-		and #FRAG_TENV
-		beq @N4
-		jsr toneenv
-	@N4:
-		lda EnvFrags, x
-		and #FRAG_VENV
-		beq tovol
-		jsr volenv
-		jmp calc
-	tovol:
-		jmp vol
+		process_envelope start, 0
 .endproc
 
 ;NSFのトラック別シーケンスバンクを選択する
