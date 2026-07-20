@@ -21,12 +21,12 @@ if (Test-Path $zipFileName) {
 [String] $temp = "temp_" + $now + "_" + $path
 
 # 除外ファイル
-[Array] $exclude = @( "*.pdb", "*.exp", "*.lib", "Settings.xml", "runtimes", "Presets.bin")
+[Array] $exclude = @( "*.pdb", "*.exp", "*.lib", "Settings.xml", "runtimes", "Presets.bin", "AGENTS.md")
 
 # 一時フォルダ作成
 Copy-Item $targetDir -Recurse $temp -Exclude $exclude
-Copy-Item $txtFileName $temp
-Copy-Item $mdFileName $temp
+Copy-Item $txtFileName $temp -Exclude $exclude
+Copy-Item $mdFileName $temp -Exclude $exclude
 
 # 対象となるファイル
 $files = Get-ChildItem -Path $temp -Exclude $exclude
