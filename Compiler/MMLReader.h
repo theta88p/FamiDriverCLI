@@ -56,7 +56,6 @@
 #define FDS_MOD_FREQ		0xf9
 #define FDS_MOD_TONE		0xfa
 #define FDS_MOD_ENV			0xfb
-#define N163_CH_COUNT		0xfc
 #define N163_WAVE_SETUP		0xfd
 #define VRC7_PATCH			0xfe
 
@@ -120,7 +119,12 @@ private:
 	int totalpos;
 	std::vector<unsigned char> n163WaveOffsets;
 	std::vector<unsigned char> n163WaveLengthRegs;
-	std::vector<unsigned char> n163WaveFreqShifts;
+	std::vector<unsigned char> n163WaveLengthUnits;
+	std::map<int, int> n163FreqTableOffsets;
+	std::map<int, int> n163FreqTableBaseAddresses;
+	std::map<int, int> n163ChannelCounts;
+	int n163MaxChannelCount = 8;
+	int n163WaveDataSize = 64;
 	std::map<int, std::vector<unsigned char>> vrc7Patches;
 
 	bool skipUntil(std::string input);
@@ -146,9 +150,10 @@ private:
 	void readMacro(std::map<std::string, std::string, cmpByStringLength>& macrolist);
 	void replaceMacro(std::map<std::string, std::string, cmpByStringLength>& macrolist, std::stringstream& ss);
 	void readDifinitions();
+	void readN163ChannelCounts();
 	void readSubRoutine(int& subsize);
 	void readEnvelope(int& envsize);
-	void readBrackets(int startpos, int trackheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone);
+	void readBrackets(int startpos, int trackheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone, int n163ChannelCount = 8);
 	void readWaveData(std::vector<unsigned char>& out);
 	void readModData(std::vector<unsigned char>& out);
 	void readVrc7Patch();

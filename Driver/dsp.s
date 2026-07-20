@@ -13,7 +13,9 @@
 .import		palette
 .ifdef N163
 .import		N163ChCount
-.import		N163FreqShift
+.import		N163FreqTbl_L
+.import		N163FreqTbl_H
+.import		TrackBank
 .endif
 
 .exportzp	CpuCtrL
@@ -40,6 +42,14 @@ DspWork:	.res	10
 DspChannel:	.res	1
 CpuCtrL:	.res	1
 CpuCtrH:	.res	1
+.ifdef N163
+DspN163FreqL:	.res	MAX_TRACK
+DspN163FreqH:	.res	MAX_TRACK
+DspN163FreqX:	.res	MAX_TRACK
+DspN163Octave:	.res	MAX_TRACK
+DspN163Note:	.res	MAX_TRACK
+DspN163Phase:	.res	1
+.endif
 
 .bss
 
@@ -738,6 +748,11 @@ YPOS_CPU = $bf
 
 .ifdef N163
 	;---------------N163 ch1---------------
+		lda DspN163Phase
+		clc
+		adc #1
+		and #3
+		sta DspN163Phase
 	n163_01:
 		ldx #DEV_N163_CH1
 		lda ActTbl, x
@@ -1386,6 +1401,15 @@ vrc7_dsp_channel:
 
 
 .proc dsp_init
+.ifdef N163
+		lda #0
+		sta DspN163Phase
+		lda #$ff
+		ldx #LAST_TRACK
+	:	sta DspN163FreqX, x
+		dex
+		bpl :-
+.endif
 		lda #$30
 		sta __c
 		sta __cc
@@ -2509,64 +2533,69 @@ vrc7_dsp_channel:
 		rts
 
 	@start:
+		lda Freq_X, x
+		cmp DspN163FreqX, x
+		bne @changed
+		lda Freq_H, x
+		cmp DspN163FreqH, x
+		bne @changed
 		lda Freq_L, x
+		cmp DspN163FreqL, x
+		bne @changed
+	@use_cache:
+		lda DspN163Octave, x
+		sta DspWork + 2
+		lda DspN163Note, x
+		sta DspWork + 3
+		rts
+
+	@changed:
+		lda DspN163FreqX, x
+		cmp #$ff
+		beq @calculate
+		lda N163ChCount
+		cmp #4
+		bcc @calculate
+		cmp #7
+		bcs @spread_four_frames
+		lda DspN163Phase
+		and #1
+		sta DspWork + 9
+		lda Device, x
+		sec
+		sbc #DEV_N163_CH1
+		and #1
+		cmp DspWork + 9
+		bne @use_cache
+		beq @calculate
+
+	@spread_four_frames:
+		lda Device, x
+		sec
+		sbc #DEV_N163_CH1
+		and #3
+		cmp DspN163Phase
+		bne @use_cache
+
+	@calculate:
+		lda Freq_L, x
+		sta DspN163FreqL, x
 		sta DspWork
 		lda Freq_H, x
+		sta DspN163FreqH, x
 		sta DspWork + 1
 		lda Freq_X, x
+		sta DspN163FreqX, x
 		sta DspWork + 2
 
-		lda N163ChCount
-		cmp #2
-		beq @ch2
-		cmp #3
-		beq @ch3
-		cmp #4
-		beq @ch4
-		cmp #5
-		beq @ch5
-		cmp #6
-		beq @ch6
-		cmp #7
-		beq @ch7
-		cmp #8
-		beq @ch8
-
-	@ch1:
-		jsr @set_table_1
+		lda TrackBank, x		;補正済み周波数表を含むトラックバンクを選択
+		sta $e800
+		lda N163FreqTbl_L, x
+		sta DspWork + 5
+		lda N163FreqTbl_H, x
+		sta DspWork + 6
+		jsr @load_next_c
 		lda #8
-		jmp @set_octave
-	@ch2:
-		jsr @set_table_1
-		lda #7
-		jmp @set_octave
-	@ch3:
-		jsr @set_table_6
-		lda #9
-		jmp @set_octave
-	@ch4:
-		jsr @set_table_1
-		lda #6
-		jmp @set_octave
-	@ch5:
-		jsr @set_table_5
-		lda #8
-		jmp @set_octave
-	@ch6:
-		jsr @set_table_6
-		lda #8
-		jmp @set_octave
-	@ch7:
-		jsr @set_table_7
-		lda #8
-		jmp @set_octave
-	@ch8:
-		jsr @set_table_1
-		lda #5
-
-	@set_octave:
-		sec
-		sbc N163FreqShift, x
 		sta DspWork + 4
 
 	@normalize_low:
@@ -2580,8 +2609,7 @@ vrc7_dsp_channel:
 		jmp @normalize_low
 
 	@normalize_high:
-		ldy #36
-		jsr cmp_n163_freq_base
+		jsr cmp_n163_freq_limit
 		bcc @find_note
 		lsr DspWork + 2
 		ror DspWork + 1
@@ -2590,71 +2618,112 @@ vrc7_dsp_channel:
 		jmp @normalize_high
 
 	@find_note:
-		lda #0
+		lda #0			;補正済み12音表を二分探索する
+		sta DspWork + 3		;low
+		lda #12
+		sta DspWork + 7		;high
+	@binary_loop:
+		lda DspWork + 3
+		cmp DspWork + 7
+		bcs @binary_done
+		clc
+		adc DspWork + 7
+		lsr
+		sta DspWork + 9		;mid
+		asl
+		clc
+		adc DspWork + 9
+		tay
+		jsr cmp_n163_freq_base
+		bcc @binary_lower
+		lda DspWork + 9
+		clc
+		adc #1
 		sta DspWork + 3
-		ldy #0
-	@note_loop:
-		jsr cmp_n163_freq_threshold
+		jmp @binary_loop
+	@binary_lower:
+		lda DspWork + 9
+		sta DspWork + 7
+		jmp @binary_loop
+	@binary_done:
+		dec DspWork + 3		;low - 1が直下の音名
+
+		lda DspWork + 3		;次の音との中点を作る
+		cmp #11
+		beq @next_octave_c
+		clc
+		adc #1
+		sta DspWork + 9
+		asl
+		clc
+		adc DspWork + 9
+		tay
+		lda (DspWork + 5), y
+		sta DspWork + 7
+		iny
+		lda (DspWork + 5), y
+		sta DspWork + 8
+		iny
+		lda (DspWork + 5), y
+		sta DspWork + 9
+		jmp @add_current_note
+	@next_octave_c:
+		jsr @load_next_c
+	@add_current_note:
+		lda DspWork + 3
+		asl
+		clc
+		adc DspWork + 3
+		tay
+		clc
+		lda DspWork + 7
+		adc (DspWork + 5), y
+		sta DspWork + 7
+		iny
+		lda DspWork + 8
+		adc (DspWork + 5), y
+		sta DspWork + 8
+		iny
+		lda DspWork + 9
+		adc (DspWork + 5), y
+		sta DspWork + 9
+		lsr DspWork + 9
+		ror DspWork + 8
+		ror DspWork + 7
+		jsr cmp_n163_freq_limit
 		bcc @done
 		inc DspWork + 3
-		tya
-		clc
-		adc #3
-		tay
-		cpy #36
-		bcc @note_loop
+		lda DspWork + 3
+		cmp #12
+		bcc @done
 		lda #0
 		sta DspWork + 3
 		inc DspWork + 4
 	@done:
 		lda DspWork + 4
 		sta DspWork + 2
+		sta DspN163Octave, x
+		lda DspWork + 3
+		sta DspN163Note, x
 		rts
 
-	@set_table_1:
-		lda #<Freq_N163_Dsp_1
-		sta DspWork + 5
-		lda #>Freq_N163_Dsp_1
-		sta DspWork + 6
-		lda #<Freq_N163_Mid_1
+	@load_next_c:
+		ldy #0			;表先頭のCを2倍して次オクターブのCを作る
+		lda (DspWork + 5), y
+		asl
 		sta DspWork + 7
-		lda #>Freq_N163_Mid_1
+		iny
+		lda (DspWork + 5), y
+		rol
 		sta DspWork + 8
-		rts
-	@set_table_5:
-		lda #<Freq_N163_Dsp_5
-		sta DspWork + 5
-		lda #>Freq_N163_Dsp_5
-		sta DspWork + 6
-		lda #<Freq_N163_Mid_5
-		sta DspWork + 7
-		lda #>Freq_N163_Mid_5
-		sta DspWork + 8
-		rts
-	@set_table_6:
-		lda #<Freq_N163_Dsp_6
-		sta DspWork + 5
-		lda #>Freq_N163_Dsp_6
-		sta DspWork + 6
-		lda #<Freq_N163_Mid_6
-		sta DspWork + 7
-		lda #>Freq_N163_Mid_6
-		sta DspWork + 8
-		rts
-	@set_table_7:
-		lda #<Freq_N163_Dsp_7
-		sta DspWork + 5
-		lda #>Freq_N163_Dsp_7
-		sta DspWork + 6
-		lda #<Freq_N163_Mid_7
-		sta DspWork + 7
-		lda #>Freq_N163_Mid_7
-		sta DspWork + 8
+		iny
+		lda (DspWork + 5), y
+		rol
+		sta DspWork + 9
 		rts
 .endproc
 
 .proc cmp_n163_freq_base
-		sty DspWork + 9
 		iny
 		iny
 		lda DspWork + 2
@@ -2668,26 +2737,19 @@ vrc7_dsp_channel:
 		lda DspWork
 		cmp (DspWork + 5), y
 	@end:
-		ldy DspWork + 9
 		rts
 .endproc
 
-.proc cmp_n163_freq_threshold
-		sty DspWork + 9
-		iny
-		iny
+.proc cmp_n163_freq_limit
 		lda DspWork + 2
-		cmp (DspWork + 7), y
+		cmp DspWork + 9
 		bne @end
-		dey
 		lda DspWork + 1
-		cmp (DspWork + 7), y
+		cmp DspWork + 8
 		bne @end
-		dey
 		lda DspWork
-		cmp (DspWork + 7), y
+		cmp DspWork + 7
 	@end:
-		ldy DspWork + 9
 		rts
 .endproc
 .endif
@@ -2741,50 +2803,4 @@ Freq_Note_Fds:
 	.byte	$00, $00, $01, $01, $02, $02, $02, $03, $03, $03, $04, $04, $04, $05, $05, $05
 	.byte	$06, $06, $06, $07, $07, $07, $08, $08, $08, $08, $09, $09, $09, $09, $0a, $0a
 	.byte	$0a, $0a, $0b, $0b
-.endif
-
-.ifdef N163
-Freq_N163_Dsp_1:
-	.byte	$66, $1f, $01, $7d, $30, $01, $98, $42, $01, $c7, $55, $01
-	.byte	$19, $6a, $01, $a1, $7f, $01, $71, $96, $01, $9c, $ae, $01
-	.byte	$37, $c8, $01, $5a, $e3, $01, $16, $00, $02, $89, $1e, $02
-	.byte	$cc, $3e, $02
-
-Freq_N163_Dsp_5:
-	.byte	$fb, $9c, $05, $6f, $f2, $05, $f6, $4c, $06, $e0, $ac, $06
-	.byte	$7e, $12, $07, $26, $7e, $07, $35, $f0, $07, $0c, $69, $08
-	.byte	$13, $e9, $08, $bf, $70, $09, $6b, $00, $0a, $ac, $98, $0a
-	.byte	$f6, $39, $0b
-
-Freq_N163_Dsp_6:
-	.byte	$61, $bc, $06, $ec, $22, $07, $8e, $8f, $07, $a7, $02, $08
-	.byte	$97, $7c, $08, $c7, $fd, $08, $a6, $86, $09, $a8, $17, $0a
-	.byte	$4a, $b1, $0a, $19, $54, $0b, $81, $00, $0c, $35, $b7, $0c
-	.byte	$c2, $78, $0d
-
-Freq_N163_Dsp_7:
-	.byte	$c7, $db, $07, $69, $53, $08, $26, $d2, $08, $6e, $58, $09
-	.byte	$b0, $e6, $09, $68, $7d, $0a, $17, $1d, $0b, $44, $c6, $0b
-	.byte	$81, $79, $0c, $73, $37, $0d, $97, $00, $0e, $be, $d5, $0e
-	.byte	$8e, $b7, $0f
-
-Freq_N163_Mid_1:
-	.byte	$f1, $27, $01, $8a, $39, $01, $2f, $4c, $01, $f0, $5f, $01
-	.byte	$dd, $74, $01, $09, $8b, $01, $86, $a2, $01, $69, $bb, $01
-	.byte	$c8, $d5, $01, $b8, $f1, $01, $4f, $0f, $02, $aa, $2e, $02
-
-Freq_N163_Mid_5:
-	.byte	$b5, $c7, $05, $b2, $1f, $06, $eb, $7c, $06, $af, $df, $06
-	.byte	$52, $48, $07, $2d, $b7, $07, $a0, $2c, $08, $0f, $a9, $08
-	.byte	$e9, $2c, $09, $95, $b8, $09, $8b, $4c, $0a, $51, $e9, $0a
-
-Freq_N163_Mid_6:
-	.byte	$a6, $ef, $06, $3d, $59, $07, $1a, $c9, $07, $9f, $3f, $08
-	.byte	$2f, $bd, $08, $36, $42, $09, $27, $cf, $09, $79, $64, $0a
-	.byte	$b1, $02, $0b, $4d, $aa, $0b, $db, $5b, $0c, $fb, $17, $0d
-
-Freq_N163_Mid_7:
-	.byte	$98, $17, $08, $c7, $92, $08, $4a, $15, $09, $8f, $9f, $09
-	.byte	$0c, $32, $0a, $3f, $cd, $0a, $ad, $71, $0b, $e2, $1f, $0c
-	.byte	$7a, $d8, $0c, $05, $9c, $0d, $2a, $6b, $0e, $a6, $46, $0f
 .endif

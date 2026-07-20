@@ -16,7 +16,10 @@
 .export		DrvBankedMode
 .ifdef N163
 .export		N163ChCount
-.export		N163FreqShift
+.export		N163WaveLenReg
+.export		N163FreqTbl_L
+.export		N163FreqTbl_H
+.export		TrackBank
 .endif
 
 .include	"drv.inc"
@@ -123,12 +126,16 @@ SS5BHWEnv:		.res	3	;ハードウェアエンベロープが有効なら1無効�
 .ifdef N163
 N163WavAddr_L:	.res	1
 N163WavAddr_H:	.res	1
+N163WaveDataSize:	.res	1
 N163ChCount:	.res	1
 N163ChOffset:	.res	1
 N163ChReg:		.res	1
+N163FreqBase_L:	.res	1
+N163FreqBase_H:	.res	1
 N163WaveOffset:	.res	MAX_TRACK
 N163WaveLenReg:	.res	MAX_TRACK
-N163FreqShift:	.res	MAX_TRACK
+N163FreqTbl_L:	.res	MAX_TRACK
+N163FreqTbl_H:	.res	MAX_TRACK
 .endif
 
 .ifdef FDS
@@ -185,7 +192,6 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ;f9 :@fdsf	FDSモジュレーション周波数
 ;fa	:@fdsm	FDSモジュレータ番号
 ;fb	:@fdse	FDSモジュレーションエンベロープ
-;fc	:@n163c	N163発音数
 ;fd	:N163波形設定
 ;fe	:VRC7ユーザー音色設定
 
@@ -388,10 +394,11 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #0
 		sta FEnvShift, x
 .ifdef N163
-		sta N163FreqShift, x
-		lda #$80
+		lda #0
 		sta N163WaveOffset, x
-		lda #$e0
+		sta N163FreqTbl_L, x
+		sta N163FreqTbl_H, x
+		lda #$e1		;下位bit 0は波形オフセットのdirtyフラグ
 		sta N163WaveLenReg, x
 .endif
 		lda #1
@@ -500,18 +507,6 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta DefLen, x	;デフォルト音長を保存
 		dex
 		bpl @L
-.ifdef N163
-		iny
-		lda (Work), y
-		clc
-		adc SeqAddr_L
-		sta N163WavAddr_L
-		iny
-		lda (Work), y
-		adc SeqAddr_H
-		sta N163WavAddr_H
-		jsr n163_load_wave
-.endif
 .ifdef FDS
 		iny
 		lda (Work), y
@@ -537,6 +532,53 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda #$ff
 		sta FdsModTone	;モジュレータ波形を指定しない場合無効
 		sta FdsPrevMod
+.endif
+.ifdef N163
+		iny
+		lda (Work), y
+		sta N163ChCount
+		lda #8
+		sec
+		sbc N163ChCount
+		sta N163ChOffset
+		lda N163ChCount
+		sec
+		sbc #1
+		asl
+		asl
+		asl
+		asl
+		sta N163ChReg
+		iny
+		lda (Work), y
+		sta N163WaveDataSize
+		iny
+		lda (Work), y
+		clc
+		adc SeqAddr_L
+		sta N163WavAddr_L
+		iny
+		lda (Work), y
+		adc SeqAddr_H
+		sta N163WavAddr_H
+		iny
+		lda (Work), y
+		clc
+		adc SeqAddr_L
+		sta N163FreqBase_L
+		iny
+		lda (Work), y
+		adc SeqAddr_H
+		sta N163FreqBase_H
+		ldx LastTrack
+	@freq_table_loop:
+		lda N163FreqBase_L
+		sta N163FreqTbl_L, x
+		lda N163FreqBase_H
+		sta N163FreqTbl_H, x
+		dex
+		bpl @freq_table_loop
+		jsr n163_load_wave
 .endif
 		lda #$ff
 		ldx #MAX_DEVICE - 1	;テーブル初期化
@@ -1407,30 +1449,6 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		jsr addptr
 		rts
 
-	n163_ch_count:		;N163発音数
-.ifdef N163
-		ldy #1
-		lda (Work), y
-		sta N163ChCount
-		lda #8
-		sec
-		sbc N163ChCount
-		sta N163ChOffset
-		lda N163ChCount
-		sec
-		sbc #1
-		asl
-		asl
-		asl
-		asl
-		sta N163ChReg
-		jsr n163_mute_channels
-		jsr n163_update_freq
-.endif
-		lda #2
-		jsr addptr
-		rts
-
 	n163_wave_setup:	;N163波形設定
 .ifdef N163
 		ldy #1
@@ -1438,12 +1456,19 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta N163WaveOffset, x
 		ldy #2
 		lda (Work), y
+		ora #1			;波形オフセットを次のレジスタ更新で反映する
 		sta N163WaveLenReg, x
 		ldy #3
 		lda (Work), y
-		sta N163FreqShift, x
+		clc
+		adc N163FreqBase_L
+		sta N163FreqTbl_L, x
+		iny
+		lda (Work), y
+		adc N163FreqBase_H
+		sta N163FreqTbl_H, x
 .endif
-		lda #4
+		lda #5
 		jsr addptr
 		rts
 
@@ -1507,7 +1532,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		.word fds_mod_freq - 1
 		.word fds_mod_tone - 1
 		.word fds_mod_env - 1
-		.word n163_ch_count - 1
+		.word unknown_cmd - 1
 		.word n163_wave_setup - 1
 		.word vrc7_patch - 1
 	upper_table_end:
@@ -1780,125 +1805,42 @@ sw_sweep_delay_table:
 .endif
 	n163:
 .ifdef N163
+		lda N163FreqTbl_L, x
+		sta Work
+		lda N163FreqTbl_H, x
+		sta Work + 1
 		lda Work + 9
 		asl
 		clc
 		adc Work + 9
 		tay
-		lda Freq_N163, y
+		lda (Work), y
 		sta Work + 2
-		lda Freq_N163 + 1, y
+		iny
+		lda (Work), y
 		sta Work + 3
-		lda Freq_N163 + 2, y
+		iny
+		lda (Work), y
 		sta Work + 4
-		lda Work + 8	;N163は周波数と比例なので、発音数と波形長をシフト量に畳み込む
+
+		lda Work + 8	;波形長・発音数補正済み表を対象オクターブまで右シフトする
 		cmp #8
 		bcc @oct_ok
 		lda #8
 		sta Work + 8
 	@oct_ok:
-		lda N163ChCount
-		cmp #1
-		bne :+
 		lda #8
-		jmp @shift_sub
-	:	cmp #2
-		bne :+
-		lda #7
-		jmp @shift_sub
-	:	cmp #4
-		bne :+
-		lda #6
-		jmp @shift_sub
-	:	cmp #8
-		bne :+
-		lda #5
-		jmp @shift_sub
-	:	lda #8
-		jsr @shift_sub
-		lda Work + 2
-		sta Work + 5
-		lda Work + 3
-		sta Work + 6
-		lda Work + 4
-		sta Work + 7
-		lda Work + 9
-		asl
-		clc
-		adc Work + 9
-		tay
-		lda Freq_N163_6, y
-		sta Work + 2
-		lda Freq_N163_6 + 1, y
-		sta Work + 3
-		lda Freq_N163_6 + 2, y
-		sta Work + 4
-		lda #8
-		jsr @shift_sub
-		lda N163ChCount
-		cmp #3
-		beq @C3
-		cmp #5
-		beq @C5
-		cmp #7
-		beq @C7
-		rts
-	@C3:
-		lsr Work + 4
-		ror Work + 3
-		ror Work + 2
-		rts
-	@C5:
-		sec
-		lda Work + 2
-		sbc Work + 5
-		sta Work + 2
-		lda Work + 3
-		sbc Work + 6
-		sta Work + 3
-		lda Work + 4
-		sbc Work + 7
-		sta Work + 4
-		rts
-	@C7:
-		clc
-		lda Work + 2
-		adc Work + 5
-		sta Work + 2
-		lda Work + 3
-		adc Work + 6
-		sta Work + 3
-		lda Work + 4
-		adc Work + 7
-		sta Work + 4
-		rts
-	@shift_sub:
 		sec
 		sbc Work + 8
-		sec
-		sbc N163FreqShift, x
-		beq @SR
-		bmi @SL
+		beq @frequency_done
 		tay
-	@RR:
+	@scale_loop:
 		lsr Work + 4
 		ror Work + 3
 		ror Work + 2
 		dey
-		bne @RR
-	@SR:
-		rts
-	@SL:
-		eor #$ff
-		clc
-		adc #1
-		tay
-	@LL:
-		asl Work + 2
-		rol Work + 3
-		rol Work + 4
-		dey
-		bne @LL
+		bne @scale_loop
+	@frequency_done:
 		rts
 .endif
 	calc:
@@ -3594,59 +3536,6 @@ sw_sweep_delay_table:
 
 ;N163
 .ifdef N163
-.proc n163_mute_channels
-		lda #$47
-		sta Work
-		ldy #7
-		lda #0
-	@L:
-		lda Work
-		ora #$80
-		sta $f800
-		lda #0
-		sta $4800
-		lda Work
-		clc
-		adc #8
-		sta Work
-		dey
-		bne @L
-		lda #$ff
-		sta $f800
-		lda N163ChReg
-		sta $4800
-		rts
-.endproc
-
-.proc n163_update_freq
-		ldx #LAST_TRACK
-	@L:
-		lda Frags, x
-		and #FRAG_END
-		bne @N
-		lda Device, x
-		cmp #DEV_N163_CH1
-		bcc @N
-		cmp #DEV_N163_CH8 + 1
-		bcs @N
-		lda NoteN, x
-		jsr calcfreq
-		lda Work + 2
-		sta Freq_L, x
-		sta RefFreq_L, x
-		lda Work + 3
-		sta Freq_H, x
-		sta RefFreq_H, x
-		lda Work + 4
-		sta Freq_X, x
-		sta RefFreq_X, x
-	@N:
-		dex
-		bpl @L
-		ldx ProcTr
-		rts
-.endproc
-
 .proc n163_load_wave
 		lda #$80
 		sta $f800
@@ -3656,19 +3545,21 @@ sw_sweep_delay_table:
 		sta Work + 1
 		ldy #0
 	@L:
+		cpy N163WaveDataSize
+		bcs @clear
 		lda (Work), y
 		sta $4800
 		iny
-		cpy #64
-		bcc @L
-		lda #$c0
-		sta $f800
+		bne @L
+	@clear:
 		lda #0
-		ldy #64
 	@C:
+		cpy #128
+		bcs @done
 		sta $4800
-		dey
+		iny
 		bne @C
+	@done:
 		lda #$ff
 		sta $f800
 		lda N163ChReg
@@ -3702,24 +3593,32 @@ sw_sweep_delay_table:
 		sta $f800
 		lda Freq_X, x
 		and #$03
-		ora N163WaveLenReg, x
+		sta Work + 1
+		lda N163WaveLenReg, x
+		and #$fc
+		ora Work + 1
 		sta $4800
+		lda N163WaveLenReg, x
+		and #1
+		beq @volume_only
 		lda Work
 		clc
 		adc #6
 		ora #$80
 		sta $f800
 		lda N163WaveOffset, x
-		bpl @addr
-		lda Tone, x
-		and #$0f
-		asl
-		asl
-		asl
-		asl
-		asl
-	@addr:
 		sta $4800
+		lda N163WaveLenReg, x
+		and #$fc
+		sta N163WaveLenReg, x
+		jmp @volume
+	@volume_only:
+		lda Work
+		clc
+		adc #7
+		ora #$80
+		sta $f800
+	@volume:
 		lda Volume, x
 		cpy #7
 		bne @vol
@@ -4041,35 +3940,6 @@ Freq_5B:
 	.word	$0fe4
 	.word	$0f00
 	.word	$0e28
-.endif
-
-.ifdef N163
-Freq_N163:
-	.byte	$66, $1f, $01
-	.byte	$7d, $30, $01
-	.byte	$98, $42, $01
-	.byte	$c7, $55, $01
-	.byte	$19, $6a, $01
-	.byte	$a1, $7f, $01
-	.byte	$71, $96, $01
-	.byte	$9c, $ae, $01
-	.byte	$37, $c8, $01
-	.byte	$5a, $e3, $01
-	.byte	$16, $00, $02
-	.byte	$89, $1e, $02
-Freq_N163_6:
-	.byte	$61, $bc, $06
-	.byte	$ec, $22, $07
-	.byte	$8e, $8f, $07
-	.byte	$a7, $02, $08
-	.byte	$97, $7c, $08
-	.byte	$c7, $fd, $08
-	.byte	$a6, $86, $09
-	.byte	$a8, $17, $0a
-	.byte	$4a, $b1, $0a
-	.byte	$19, $54, $0b
-	.byte	$81, $00, $0c
-	.byte	$35, $b7, $0c
 .endif
 
 .ifdef FDS

@@ -28,6 +28,8 @@ This is a sound driver that can be played on a Famicom/NES or emulator. This typ
                 .
     }
 ```
+* When using N163, write `N163CH 1` through `N163CH 8` before the first Track in each Music block. It defaults to 8 and cannot be changed during playback.
+* N163 waveforms are shared by all songs. Their total capacity is `256 - 16 * (the largest N163CH value in the file)` samples. Each waveform length must be a multiple of 4 within that capacity.
 * You can specify a note map with @M. This is for assigning commands to scales. Just write the note number to assign, the note number to convert, and the command, and the compiler will convert it.
 
 * You can define DPCM with @dpcm. Please write the number and file path. This method uses the @ command to specify a file and select the playback frequency based on the scale. If you find it difficult to use, please use @M to assign it to a note.

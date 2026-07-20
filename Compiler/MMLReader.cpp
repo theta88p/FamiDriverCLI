@@ -64,7 +64,7 @@ MMLReader::MMLReader()
     expdevice = 0;
     n163WaveOffsets.assign(16, 0);
     n163WaveLengthRegs.assign(16, 0xe0);
-    n163WaveFreqShifts.assign(16, 0);
+    n163WaveLengthUnits.assign(16, 8);
 }
 
 MMLReader::MMLReader(std::wstring& input) : MMLReader()
@@ -156,6 +156,14 @@ void MMLReader::readMML()
     makeLengthTbl(lengthtbl);
     readDifinitions();
 
+    if (expdevice & Expdev::N163)
+    {
+        linenum = 1;
+        ss.clear();
+        ss.seekg(0);
+        readN163ChannelCounts();
+    }
+
     linenum = 1;
     ss.clear();
     ss.seekg(0);    //読み込み位置を戻す
@@ -181,6 +189,56 @@ void MMLReader::readMML()
         n163_wavaddr = totalpos;
         std::copy(n163_wavdata.begin(), n163_wavdata.end(), std::back_inserter(body));
         totalpos += n163_wavdata.size();
+
+        // 波形長と発音数を補正済みの周波数表をシーケンス共通領域に置く。
+        // 3bit正規化しておき、ドライバ側はオクターブ分の右シフトだけで済ませる。
+        static constexpr unsigned int n163BaseFreq[] =
+        {
+            0x011f66, 0x01307d, 0x014298, 0x0155c7,
+            0x016a19, 0x017fa1, 0x019671, 0x01ae9c,
+            0x01c837, 0x01e35a, 0x020016, 0x021e89
+        };
+
+        std::vector<unsigned char> uniqueLengthUnits;
+        n163FreqTableOffsets.clear();
+        auto addLengthUnits = [&](unsigned char lengthUnits)
+        {
+            if (n163FreqTableOffsets.count(lengthUnits))
+            {
+                return;
+            }
+            n163FreqTableOffsets[lengthUnits] = static_cast<int>(uniqueLengthUnits.size()) * 36;
+            uniqueLengthUnits.push_back(lengthUnits);
+        };
+
+        addLengthUnits(8); // デフォルトの32サンプル波形を各発音数表の先頭に置く
+        for (unsigned char lengthUnits : n163WaveLengthUnits)
+        {
+            addLengthUnits(lengthUnits);
+        }
+
+        std::map<int, bool> usedChannelCounts;
+        for (const auto& [music, channelCount] : n163ChannelCounts)
+        {
+            usedChannelCounts[channelCount] = true;
+        }
+
+        n163FreqTableBaseAddresses.clear();
+        for (const auto& [channelCount, used] : usedChannelCounts)
+        {
+            n163FreqTableBaseAddresses[channelCount] = totalpos;
+            for (unsigned char lengthUnits : uniqueLengthUnits)
+            {
+                for (unsigned int baseFreq : n163BaseFreq)
+                {
+                    unsigned int freq = (baseFreq * lengthUnits * channelCount) >> 3;
+                    body.push_back(static_cast<unsigned char>(freq));
+                    body.push_back(static_cast<unsigned char>(freq >> 8));
+                    body.push_back(static_cast<unsigned char>(freq >> 16));
+                }
+                totalpos += sizeof(n163BaseFreq) / sizeof(n163BaseFreq[0]) * 3;
+            }
+        }
     }
 
     if (expdevice & Expdev::VRC7)
@@ -382,11 +440,12 @@ void MMLReader::readMML()
                 }
                 if (expdevice & Expdev::N163)
                 {
-                    trheadsize += 2; //N163の波形アドレス分
+                    trheadsize += 6; //N163の発音数、波形データサイズ、波形・周波数表アドレス分
                 }
 
                 int tone = 0;
-                readBrackets((int)ss.tellg(), trheadsize, trhead, musdata, tone);
+                int n163ChannelCount = (expdevice & Expdev::N163) ? n163ChannelCounts.at(musiclist[i]) : 8;
+                readBrackets((int)ss.tellg(), trheadsize, trhead, musdata, tone, n163ChannelCount);
                 trhead.push_back(0xff);             //トラックヘッダ終端
                 trhead.push_back(lengthtbl[3]);     //デフォルトのデフォルト音長（4分音符）
 
@@ -399,8 +458,13 @@ void MMLReader::readMML()
                 }
                 if (expdevice & Expdev::N163)
                 {
+                    trhead.push_back(n163ChannelCount); //N163の発音数
+                    trhead.push_back(n163WaveDataSize); //N163の波形データサイズ
                     trhead.push_back(n163_wavaddr & 0xff); //N163の波形アドレス
                     trhead.push_back(n163_wavaddr >> 8);
+                    int freqTableBaseAddress = n163FreqTableBaseAddresses.at(n163ChannelCount);
+                    trhead.push_back(freqTableBaseAddress & 0xff); //N163周波数表のベースアドレス
+                    trhead.push_back(freqTableBaseAddress >> 8);
                 }
 
                 head.push_back(totalpos & 0xff);
@@ -428,6 +492,119 @@ void MMLReader::readMML()
     std::copy(body.begin(), body.end(), std::back_inserter(seqdata));
 
     ifs.close();
+}
+
+
+void MMLReader::readN163ChannelCounts()
+{
+    for (int music : musiclist)
+    {
+        n163ChannelCounts[music] = 8;
+    }
+
+    n163MaxChannelCount = 1;
+    while (findStr("music"))
+    {
+        int music;
+        skipSpace();
+        if (!getMultiDigit(music))
+        {
+            continue;
+        }
+
+        skipSpace();
+        if (!isNextChar('{'))
+        {
+            continue;
+        }
+
+        int depth = 1;
+        bool n163ChannelCountSpecified = false;
+        bool trackFound = false;
+        char c;
+        while (depth > 0 && ss.get(c))
+        {
+            if (c == '\n')
+            {
+                linenum++;
+                continue;
+            }
+            if (c == '/')
+            {
+                char next;
+                if (!ss.get(next))
+                {
+                    break;
+                }
+                if (next == '/')
+                {
+                    skipUntil("\n");
+                    linenum++;
+                    continue;
+                }
+                if (next == '*')
+                {
+                    skipUntil("*/");
+                    continue;
+                }
+                ss.seekg((int)ss.tellg() - 1);
+            }
+            if (c == '{')
+            {
+                depth++;
+                continue;
+            }
+            if (c == '}')
+            {
+                depth--;
+                continue;
+            }
+            if (depth != 1)
+            {
+                continue;
+            }
+            if ((c == 't' || c == 'T') && isNextStr("rack"))
+            {
+                trackFound = true;
+                continue;
+            }
+            if ((c != 'n' && c != 'N') || !isNextStr("163ch"))
+            {
+                continue;
+            }
+
+            if (trackFound)
+            {
+                std::cerr << "Line " << linenum << " : N163CH must be specified before the first Track in Music." << std::endl;
+                exit(1);
+            }
+            if (n163ChannelCountSpecified)
+            {
+                std::cerr << "Line " << linenum << " : N163CH is already specified in Music " << music << "." << std::endl;
+                exit(1);
+            }
+
+            int count;
+            skipSpace();
+            if (!getMultiDigit(count) || count < 1 || count > 8)
+            {
+                std::cerr << "Line " << linenum << " : N163CH must be 1 to 8." << std::endl;
+                exit(1);
+            }
+
+            n163ChannelCounts[music] = count;
+            n163ChannelCountSpecified = true;
+        }
+    }
+
+    for (const auto& [music, count] : n163ChannelCounts)
+    {
+        if (count > n163MaxChannelCount)
+        {
+            n163MaxChannelCount = count;
+        }
+    }
+    n163WaveDataSize = 128 - n163MaxChannelCount * 8;
 }
 
 
@@ -1088,11 +1265,11 @@ void MMLReader::readSubRoutine(int& subsize)
         int currentSetup = -1;
         for (size_t i = 0; i < bytes.size();)
         {
-            if (bytes[i] == N163_WAVE_SETUP && i + 3 < bytes.size())
+            if (bytes[i] == N163_WAVE_SETUP && i + 4 < bytes.size())
             {
                 currentSetup = bytes[i + 1] | (bytes[i + 2] << 8) | (bytes[i + 3] << 16);
-                patched.insert(patched.end(), bytes.begin() + i, bytes.begin() + i + 4);
-                i += 4;
+                patched.insert(patched.end(), bytes.begin() + i, bytes.begin() + i + 5);
+                i += 5;
                 continue;
             }
 
@@ -1102,18 +1279,16 @@ void MMLReader::readSubRoutine(int& subsize)
                 if (tone >= 0 && tone < static_cast<int>(n163WaveOffsets.size()))
                 {
                     int offset = n163WaveOffsets[tone];
-                    if (n163WaveLengthRegs[tone] == 0xe0 && offset == tone * 32)
-                    {
-                        offset = 0x80;
-                    }
 
-                    int setup = offset | (n163WaveLengthRegs[tone] << 8) | (n163WaveFreqShifts[tone] << 16);
+                    int setup = offset | (n163WaveLengthRegs[tone] << 8) | (n163WaveLengthUnits[tone] << 16);
                     if (setup != currentSetup)
                     {
                         patched.push_back(N163_WAVE_SETUP);
                         patched.push_back(static_cast<unsigned char>(offset));
                         patched.push_back(n163WaveLengthRegs[tone]);
-                        patched.push_back(n163WaveFreqShifts[tone]);
+                        int tableOffset = n163FreqTableOffsets.at(n163WaveLengthUnits[tone]);
+                        patched.push_back(static_cast<unsigned char>(tableOffset));
+                        patched.push_back(static_cast<unsigned char>(tableOffset >> 8));
                         currentSetup = setup;
                     }
                 }
@@ -1608,7 +1783,7 @@ void MMLReader::readWaveData(std::vector<unsigned char>& out)
                                             exit(1);
                                         }
 
-                                        if (wavdata[wavnum].size() >= 128)
+                                        if (wavdata[wavnum].size() >= static_cast<size_t>(n163WaveDataSize * 2))
                                         {
                                             std::cerr << "Line " << linenum << " : [Wave difinition] Too many N163 waveform data." << std::endl;
                                             exit(1);
@@ -1667,46 +1842,31 @@ void MMLReader::readWaveData(std::vector<unsigned char>& out)
 
     if (expdevice & Expdev::N163)
     {
-        auto isPowerOfTwoLength = [](int length)
-        {
-            return length >= 4 && length <= 128 && (length & (length - 1)) == 0;
-        };
-
-        auto log2Length = [](int length)
-        {
-            int log = 0;
-            while (length > 1)
-            {
-                length >>= 1;
-                log++;
-            }
-            return log;
-        };
-
-        out.assign(64, 0x88);
+        out.assign(n163WaveDataSize, 0x88);
         n163WaveOffsets.assign(16, 0);
         n163WaveLengthRegs.assign(16, 0xe0);
-        n163WaveFreqShifts.assign(16, 0);
+        n163WaveLengthUnits.assign(16, 8);
 
         int sampleOffset = 0;
         for (const auto& [wavnum, data] : wavdata)
         {
             int length = static_cast<int>(data.size());
-            if (!isPowerOfTwoLength(length))
+            int maxSamples = n163WaveDataSize * 2;
+            if (length < 4 || length > maxSamples || length % 4 != 0)
             {
-                std::cerr << "Line " << linenum << " : [Wave difinition] N163 wave length must be 4, 8, 16, 32, 64 or 128." << std::endl;
+                std::cerr << "Line " << linenum << " : [Wave difinition] N163 wave length must be a multiple of 4 from 4 to " << maxSamples << "." << std::endl;
                 exit(1);
             }
 
-            if (sampleOffset + length > 128)
+            if (sampleOffset + length > maxSamples)
             {
-                std::cerr << "Line " << linenum << " : [Wave difinition] Too much N163 waveform data. Total wave length must be 128 samples or less." << std::endl;
+                std::cerr << "Line " << linenum << " : [Wave difinition] Too much N163 waveform data. Total wave length must be " << maxSamples << " samples or less." << std::endl;
                 exit(1);
             }
 
             n163WaveOffsets[wavnum] = static_cast<unsigned char>(sampleOffset);
             n163WaveLengthRegs[wavnum] = static_cast<unsigned char>(256 - length);
-            n163WaveFreqShifts[wavnum] = static_cast<unsigned char>(log2Length(length) - 5);
+            n163WaveLengthUnits[wavnum] = static_cast<unsigned char>(length / 4);
 
             for (int i = 0; i < length; i += 2)
             {
@@ -1868,7 +2028,7 @@ void MMLReader::readModData(std::vector<unsigned char>& out)
 }
 
 
-void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone)
+void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned char>& trhead, std::vector<unsigned char>& trbody, int& tone, int n163ChannelCount)
 {
     struct DefLenGuard
     {
@@ -2103,12 +2263,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
         }
 
         unsigned char offset = n163WaveOffsets[tone];
-        if (n163WaveLengthRegs[tone] == 0xe0 && offset == tone * 32)
-        {
-            offset = 0x80;
-        }
 
-        int setup = offset | (n163WaveLengthRegs[tone] << 8) | (n163WaveFreqShifts[tone] << 16);
+        int setup = offset | (n163WaveLengthRegs[tone] << 8) | (n163WaveLengthUnits[tone] << 16);
         if (setup == n163WaveSetup)
         {
             return;
@@ -2117,7 +2273,9 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
         data.push_back(N163_WAVE_SETUP);
         data.push_back(offset);
         data.push_back(n163WaveLengthRegs[tone]);
-        data.push_back(n163WaveFreqShifts[tone]);
+        int tableOffset = n163FreqTableOffsets.at(n163WaveLengthUnits[tone]);
+        data.push_back(static_cast<unsigned char>(tableOffset));
+        data.push_back(static_cast<unsigned char>(tableOffset >> 8));
         n163WaveSetup = setup;
     };
 
@@ -2901,39 +3059,6 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                 }
             }
-            else if (isNextStr("n163") || isNextStr("N163"))
-            {
-                if ((expdevice & Expdev::N163) && tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
-                {
-                    if (isNextChar('c') || isNextChar('C'))   //N163 channel count
-                    {
-                        skipSpace();
-                        if (getMultiDigit(n))
-                        {
-                            if (n >= 1 && n <= 8)
-                            {
-                                data.push_back(N163_CH_COUNT);
-                                data.push_back(n);
-                            }
-                            else
-                            {
-                                std::cerr << "Line " << linenum << " : N163 channel count must be 1 to 8." << std::endl;
-                                exit(1);
-                            }
-                        }
-                        else
-                        {
-                            std::cerr << "Line " << linenum << " : N163 channel count is not specified." << std::endl;
-                            exit(1);
-                        }
-                    }
-                    else
-                    {
-                        std::cerr << "Line " << linenum << " : Invalid N163 command." << std::endl;
-                        exit(1);
-                    }
-                }
-            }
             else if (getc(c))
             {
                 if (c == 'p' || c == 'P')       //指定した曲番号のデータを再生
@@ -3153,6 +3278,28 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 }
             }
             break;
+        case 'n':
+        case 'N':
+            if (isNextStr("163ch"))
+            {
+                if (trheadsize == 0 || isTrack)
+                {
+                    std::cerr << "Line " << linenum << " : N163CH must be specified before the first Track in Music." << std::endl;
+                    exit(1);
+                }
+                skipSpace();
+                if (!getMultiDigit(n) || n != n163ChannelCount)
+                {
+                    std::cerr << "Line " << linenum << " : Invalid N163CH." << std::endl;
+                    exit(1);
+                }
+            }
+            else
+            {
+                std::cerr << "Line " << linenum << " : Unknown command '" << c << "'" << std::endl;
+                exit(1);
+            }
+            break;
         case 't':   //トラック開始かテンポ
         case 'T':
             if (isNextStr("rack"))   //トラック開始
@@ -3234,6 +3381,20 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                             {
                                 std::cerr << "Line " << linenum << " : VRC7 track requires #expdevice VRC7." << std::endl;
                                 exit(1);
+                            }
+
+                            if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
+                            {
+                                if (!(expdevice & Expdev::N163))
+                                {
+                                    std::cerr << "Line " << linenum << " : N163 track requires #expdevice N163." << std::endl;
+                                    exit(1);
+                                }
+                                if (tr.device >= DEV_N163_CH1 + n163ChannelCount)
+                                {
+                                    std::cerr << "Line " << linenum << " : N163 track exceeds N163CH " << n163ChannelCount << "." << std::endl;
+                                    exit(1);
+                                }
                             }
 
                             if (tr.device == DEV_FDS)
