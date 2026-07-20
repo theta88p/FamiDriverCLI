@@ -44,8 +44,10 @@ bgm_00:		.addr	_BGM0
 	pha
 	jsr nsf_select_banks
 	jsr drv_init
+	.ifndef FLAT_TRACK_DATA
 	lda #1
 	sta DrvBankedMode
+	.endif
 	
 	pla
 	tay

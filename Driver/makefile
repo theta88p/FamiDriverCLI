@@ -56,6 +56,12 @@ LD_DSP_MMC5_FLAGS = -C $(CFG_DSP_MMC5_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) 
 LD_DSP_SS5B_FLAGS = -C $(CFG_DSP_SS5B_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 LD_DSP_N163_FLAGS = -C $(CFG_DSP_N163_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
 LD_DSP_FDS_FLAGS = -C $(CFG_DSP_FDS_FILE) -L$(LIB_PASS) -v -m $(MAP_DSP_FILE) -vm --dbgfile $(DBG_DSP_FILE)
+LD_DSP_MMC3_FLAT_FLAGS = -C nes_mmc3_flat.cfg -L$(LIB_PASS) -v -m dsp_mmc3_flat.map -vm --dbgfile dsp_mmc3_flat.dbg
+LD_DSP_VRC6_FLAT_FLAGS = -C nes_vrc6_flat.cfg -L$(LIB_PASS) -v -m dsp_vrc6_flat.map -vm --dbgfile dsp_vrc6_flat.dbg
+LD_DSP_VRC7_FLAT_FLAGS = -C nes_vrc7_flat.cfg -L$(LIB_PASS) -v -m dsp_vrc7_flat.map -vm --dbgfile dsp_vrc7_flat.dbg
+LD_DSP_MMC5_FLAT_FLAGS = -C nes_mmc5_flat.cfg -L$(LIB_PASS) -v -m dsp_mmc5_flat.map -vm --dbgfile dsp_mmc5_flat.dbg
+LD_DSP_SS5B_FLAT_FLAGS = -C nes_ss5b_flat.cfg -L$(LIB_PASS) -v -m dsp_ss5b_flat.map -vm --dbgfile dsp_ss5b_flat.dbg
+LD_DSP_N163_FLAT_FLAGS = -C nes_n163_flat.cfg -L$(LIB_PASS) -v -m dsp_n163_flat.map -vm --dbgfile dsp_n163_flat.dbg
 
 #---------------
 #;  File delete
@@ -102,6 +108,63 @@ CP      = copy
 	$(AS) crt0_nes.s $(ASFLAGS) -D FDS=1 -o crt0_nes_fds.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 	@echo [Assemble] : main_nes.s >>$(ERRLOG_FILE)
 	$(AS) main_nes.s $(ASFLAGS) -D FDS=1 -o main_fds.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+
+main_nsf_flat.o : main_nsf.s $(INC_FILES)
+	@echo [Assemble] : main_nsf.s flat >>$(ERRLOG_FILE)
+	$(AS) main_nsf.s $(ASFLAGS) -D FLAT_TRACK_DATA=1 -o main_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_nsf_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s NSF flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D FLAT_TRACK_DATA=1 -o drv_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_vrc6_nsf_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s VRC6 NSF flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D VRC6=1 -D FLAT_TRACK_DATA=1 -o drv_vrc6_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_vrc7_nsf_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s VRC7 NSF flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D VRC7=1 -D FLAT_TRACK_DATA=1 -o drv_vrc7_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_mmc5_nsf_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s MMC5 NSF flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -D FLAT_TRACK_DATA=1 -o drv_mmc5_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_ss5b_nsf_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s SS5B NSF flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D SS5B=1 -D FLAT_TRACK_DATA=1 -o drv_ss5b_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_n163_nsf_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s N163 NSF flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D N163=1 -D FLAT_TRACK_DATA=1 -o drv_n163_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_fds_nsf_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s FDS NSF flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D FDS=1 -D FLAT_TRACK_DATA=1 -o drv_fds_nsf_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_mmc3_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s MMC3 flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D MMC3=1 -D FLAT_TRACK_DATA=1 -D DSP_DRIVER=1 -o drv_mmc3_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_vrc6_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s VRC6 flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D VRC6=1 -D FLAT_TRACK_DATA=1 -D DSP_DRIVER=1 -o drv_vrc6_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_vrc7_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s VRC7 flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D VRC7=1 -D FLAT_TRACK_DATA=1 -D DSP_DRIVER=1 -o drv_vrc7_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_mmc5_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s MMC5 flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D MMC5=1 -D FLAT_TRACK_DATA=1 -D DSP_DRIVER=1 -o drv_mmc5_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_ss5b_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s SS5B flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D SS5B=1 -D FLAT_TRACK_DATA=1 -D DSP_DRIVER=1 -o drv_ss5b_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_n163_flat.o : drv.s $(INC_FILES)
+	@echo [Assemble] : drv.s N163 flat >>$(ERRLOG_FILE)
+	$(AS) drv.s $(ASFLAGS) -D N163=1 -D FLAT_TRACK_DATA=1 -D DSP_DRIVER=1 -o drv_n163_flat.o 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 
 drv_n163.o : drv.s $(INC_FILES)
@@ -253,6 +316,14 @@ MAIN_NSF_FILES =	main_nsf.o		\
 
 endif
 
+ifndef DEBUG
+MAIN_NSF_FLAT_FILES = main_nsf_flat.o	\
+				nsf.o			\
+				crt0_nsf.o		\
+				data_nsf.o		\
+
+endif
+
 MAIN_DSP_FILES =	ines_mmc3.o	\
 				crt0_nes_mmc3.o	\
 				nmi_main_nes.o	\
@@ -315,6 +386,60 @@ MAIN_DSP_FDS_FILES = crt0_nes_fds.o	\
 				$(DSP_DATA_FILE)	\
 				dsp_fds.o		\
 
+MAIN_DSP_FLAT_FILES = ines_mmc3.o	\
+				crt0_nes_mmc3.o	\
+				nmi_main_nes.o	\
+				irq_main.o		\
+				main_nes.o		\
+				drv_mmc3_flat.o	\
+				$(DSP_DATA_FILE)	\
+				dsp_mmc3.o		\
+
+MAIN_DSP_VRC6_FLAT_FILES = ines_vrc6.o	\
+				crt0_nes_vrc6.o	\
+				nmi_main_nes.o	\
+				irq_main.o		\
+				main_nes.o		\
+				drv_vrc6_flat.o	\
+				$(DSP_DATA_FILE)	\
+				dsp_vrc6.o		\
+
+MAIN_DSP_VRC7_FLAT_FILES = ines_vrc7.o	\
+				crt0_nes_vrc7.o	\
+				nmi_main_nes.o	\
+				irq_main.o		\
+				main_nes.o		\
+				drv_vrc7_flat.o	\
+				$(DSP_DATA_FILE)	\
+				dsp_vrc7.o		\
+
+MAIN_DSP_MMC5_FLAT_FILES = ines_mmc5.o	\
+				crt0_nes_mmc5.o	\
+				nmi_main_nes.o	\
+				irq_main.o		\
+				main_nes.o		\
+				drv_mmc5_flat.o	\
+				$(DSP_DATA_FILE)	\
+				dsp_mmc5.o		\
+
+MAIN_DSP_SS5B_FLAT_FILES = ines_ss5b.o	\
+				crt0_nes_ss5b.o	\
+				nmi_main_nes.o	\
+				irq_main.o		\
+				main_nes.o		\
+				drv_ss5b_flat.o	\
+				$(DSP_DATA_FILE)	\
+				dsp_ss5b.o		\
+
+MAIN_DSP_N163_FLAT_FILES = ines_n163.o	\
+				crt0_nes_n163.o	\
+				nmi_main_nes.o	\
+				irq_main.o		\
+				main_nes.o		\
+				drv_n163_flat.o	\
+				$(DSP_DATA_FILE)	\
+				dsp_n163.o		\
+
 
 .PHONY: all clean del
 
@@ -376,7 +501,10 @@ endif
 
 else
 
-all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_vrc7.bin drv_ss5b.bin drv_n163.bin drv_fds.bin drv_all.bin dsp dsp_vrc6 dsp_vrc7 dsp_mmc5 dsp_ss5b dsp_n163 dsp_fds
+all : drv.bin drv_mmc5.bin drv_vrc6.bin drv_vrc7.bin drv_ss5b.bin drv_n163.bin drv_fds.bin drv_all.bin \
+	  drv_flat.bin drv_mmc5_flat.bin drv_vrc6_flat.bin drv_vrc7_flat.bin drv_ss5b_flat.bin drv_n163_flat.bin drv_fds_flat.bin \
+	  dsp dsp_vrc6 dsp_vrc7 dsp_mmc5 dsp_ss5b dsp_n163 dsp_fds \
+	  dsp_flat dsp_vrc6_flat dsp_vrc7_flat dsp_mmc5_flat dsp_ss5b_flat dsp_n163_flat
 
 drv.bin : drv.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
@@ -410,6 +538,34 @@ drv_all.bin : drv_all.o $(MAIN_NSF_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
+drv_flat.bin : drv_nsf_flat.o $(MAIN_NSF_FLAT_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_mmc5_flat.bin : drv_mmc5_nsf_flat.o $(MAIN_NSF_FLAT_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_vrc6_flat.bin : drv_vrc6_nsf_flat.o $(MAIN_NSF_FLAT_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_vrc7_flat.bin : drv_vrc7_nsf_flat.o $(MAIN_NSF_FLAT_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_ss5b_flat.bin : drv_ss5b_nsf_flat.o $(MAIN_NSF_FLAT_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_n163_flat.bin : drv_n163_nsf_flat.o $(MAIN_NSF_FLAT_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+drv_fds_flat.bin : drv_fds_nsf_flat.o $(MAIN_NSF_FLAT_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_NSF_FLAGS) $@ $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
 dsp : $(MAIN_DSP_FILES) $(CHR_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_DSP_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
@@ -437,6 +593,30 @@ dsp_n163 : $(MAIN_DSP_N163_FILES) $(CHR_FILES)
 dsp_fds : $(MAIN_DSP_FDS_FILES) $(CHR_FILES)
 	@echo [Link] : $@ >>$(ERRLOG_FILE)
 	$(LINKER) $(LD_DSP_FDS_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_flat : $(MAIN_DSP_FLAT_FILES) $(CHR_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_MMC3_FLAT_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_vrc6_flat : $(MAIN_DSP_VRC6_FLAT_FILES) $(CHR_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_VRC6_FLAT_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_vrc7_flat : $(MAIN_DSP_VRC7_FLAT_FILES) $(CHR_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_VRC7_FLAT_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_mmc5_flat : $(MAIN_DSP_MMC5_FLAT_FILES) $(CHR_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_MMC5_FLAT_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_ss5b_flat : $(MAIN_DSP_SS5B_FLAT_FILES) $(CHR_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_SS5B_FLAT_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
+
+dsp_n163_flat : $(MAIN_DSP_N163_FLAT_FILES) $(CHR_FILES)
+	@echo [Link] : $@ >>$(ERRLOG_FILE)
+	$(LINKER) $(LD_DSP_N163_FLAT_FLAGS) $^ 1>>$(LOG_FILE) 2>>$(ERRLOG_FILE)
 
 endif
 

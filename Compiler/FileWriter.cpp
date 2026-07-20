@@ -37,6 +37,136 @@ static char kyodaku[]{
     0x1d, 0x0e, 0x17, 0x0d, 0x18, 0x24, 0x0c, 0x18, 0x27, 0x15, 0x1d, 0x0d, 0x26, 0x26, 0x24, 0x24,
 };
 
+namespace
+{
+    constexpr int musicBankSize = 0x2000;
+
+    int readSequenceWord(const std::vector<unsigned char>& data, int pos)
+    {
+        return static_cast<int>(data[pos]) | (static_cast<int>(data[pos + 1]) << 8);
+    }
+
+    void writeSequenceWord(std::vector<unsigned char>& data, int pos, int value)
+    {
+        data[pos] = static_cast<unsigned char>(value);
+        data[pos + 1] = static_cast<unsigned char>(value >> 8);
+    }
+
+    struct SequenceLayout
+    {
+        int commonEnd;
+        std::vector<int> musicStart;
+        std::vector<int> musicEnd;
+    };
+
+    SequenceLayout analyzeSequenceLayout(const std::vector<unsigned char>& seqdata, int musicnum)
+    {
+        if (musicnum < 1 || seqdata.size() < static_cast<size_t>(musicnum * 2))
+        {
+            std::cerr << "Invalid sequence data." << std::endl;
+            exit(1);
+        }
+
+        SequenceLayout layout;
+        layout.commonEnd = static_cast<int>(seqdata.size());
+        for (int i = 0; i < musicnum; i++)
+        {
+            const int address = readSequenceWord(seqdata, i * 2);
+            layout.musicStart.push_back(address);
+            if (address < layout.commonEnd)
+            {
+                layout.commonEnd = address;
+            }
+        }
+
+        if (layout.commonEnd < musicnum * 2)
+        {
+            std::cerr << "Invalid sequence address." << std::endl;
+            exit(1);
+        }
+
+        for (const int start : layout.musicStart)
+        {
+            int end = static_cast<int>(seqdata.size());
+            for (const int address : layout.musicStart)
+            {
+                if (address > start && address < end)
+                {
+                    end = address;
+                }
+            }
+            if (start < layout.commonEnd || start >= end || end > static_cast<int>(seqdata.size()))
+            {
+                std::cerr << "Invalid sequence address." << std::endl;
+                exit(1);
+            }
+            layout.musicEnd.push_back(end);
+        }
+        return layout;
+    }
+
+    bool canUseFlatTrackBanks(const std::vector<unsigned char>& seqdata, int musicnum)
+    {
+        const auto layout = analyzeSequenceLayout(seqdata, musicnum);
+        for (size_t music = 0; music < layout.musicStart.size(); music++)
+        {
+            const int bankSize = layout.commonEnd + layout.musicEnd[music] - layout.musicStart[music];
+            if (bankSize > musicBankSize)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    std::vector<std::vector<unsigned char>> makeFlatTrackBanks(
+        const std::vector<unsigned char>& seqdata, int musicnum)
+    {
+        const auto layout = analyzeSequenceLayout(seqdata, musicnum);
+        std::vector<std::vector<unsigned char>> banks;
+        for (size_t music = 0; music < layout.musicStart.size(); music++)
+        {
+            const int oldStart = layout.musicStart[music];
+            const int oldEnd = layout.musicEnd[music];
+            std::vector<unsigned char> bank(seqdata.begin(), seqdata.begin() + layout.commonEnd);
+            for (int i = 0; i < musicnum; i++)
+            {
+                writeSequenceWord(bank, i * 2, layout.commonEnd);
+            }
+            std::copy(seqdata.begin() + oldStart, seqdata.begin() + oldEnd, std::back_inserter(bank));
+
+            int oldHeader = oldStart;
+            int newHeader = layout.commonEnd;
+            while (oldHeader < oldEnd && seqdata[oldHeader] != 0xff)
+            {
+                if (oldHeader + 3 >= oldEnd)
+                {
+                    std::cerr << "Invalid track header." << std::endl;
+                    exit(1);
+                }
+                const int oldTrackAddress = readSequenceWord(seqdata, oldHeader + 2);
+                const int newTrackAddress = layout.commonEnd + oldTrackAddress - oldStart;
+                if (oldTrackAddress < oldStart || newTrackAddress >= static_cast<int>(bank.size()))
+                {
+                    std::cerr << "Invalid track address." << std::endl;
+                    exit(1);
+                }
+                writeSequenceWord(bank, newHeader + 2, newTrackAddress);
+                oldHeader += 4;
+                newHeader += 4;
+            }
+            if (oldHeader >= oldEnd || bank.size() > musicBankSize)
+            {
+                std::cerr << "Invalid track header." << std::endl;
+                exit(1);
+            }
+            bank.resize(musicBankSize, 0);
+            banks.push_back(std::move(bank));
+        }
+        return banks;
+    }
+}
+
 FileWriter::FileWriter()
 {
 
@@ -349,16 +479,17 @@ void FileWriter::createNes()
     Utils::GetModuleDir(dir);
     std::wstring drv = dir;
     std::wstring data = dir;
+    const bool flatTrackData = canUseFlatTrackBanks(seqdata, musicnum);
 
     if (expdevice & Expdev::VRC6)
     {
-        drv += L"bin\\dsp_vrc6_code.bin";
-        data += L"bin\\dsp_vrc6_data.bin";
+        drv += flatTrackData ? L"bin\\dsp_vrc6_flat_code.bin" : L"bin\\dsp_vrc6_code.bin";
+        data += flatTrackData ? L"bin\\dsp_vrc6_flat_data.bin" : L"bin\\dsp_vrc6_data.bin";
     }
     else if (expdevice & Expdev::VRC7)
     {
-        drv += L"bin\\dsp_vrc7_code.bin";
-        data += L"bin\\dsp_vrc7_data.bin";
+        drv += flatTrackData ? L"bin\\dsp_vrc7_flat_code.bin" : L"bin\\dsp_vrc7_code.bin";
+        data += flatTrackData ? L"bin\\dsp_vrc7_flat_data.bin" : L"bin\\dsp_vrc7_data.bin";
     }
     else if (expdevice & Expdev::FDS)
     {
@@ -367,24 +498,24 @@ void FileWriter::createNes()
     }
     else if (expdevice & Expdev::MMC5)
     {
-        drv += L"bin\\dsp_mmc5_code.bin";
-        data += L"bin\\dsp_mmc5_data.bin";
+        drv += flatTrackData ? L"bin\\dsp_mmc5_flat_code.bin" : L"bin\\dsp_mmc5_code.bin";
+        data += flatTrackData ? L"bin\\dsp_mmc5_flat_data.bin" : L"bin\\dsp_mmc5_data.bin";
     }
     else if (expdevice & Expdev::N163)
     {
-        drv += L"bin\\dsp_n163_code.bin";
-        data += L"bin\\dsp_n163_data.bin";
+        drv += flatTrackData ? L"bin\\dsp_n163_flat_code.bin" : L"bin\\dsp_n163_code.bin";
+        data += flatTrackData ? L"bin\\dsp_n163_flat_data.bin" : L"bin\\dsp_n163_data.bin";
     }
     else if (expdevice & Expdev::SS5B)
     {
-        drv += L"bin\\dsp_ss5b_code.bin";
-        data += L"bin\\dsp_ss5b_data.bin";
+        drv += flatTrackData ? L"bin\\dsp_ss5b_flat_code.bin" : L"bin\\dsp_ss5b_code.bin";
+        data += flatTrackData ? L"bin\\dsp_ss5b_flat_data.bin" : L"bin\\dsp_ss5b_data.bin";
     }
     else
     {
         //2A03 with MMC3 banking
-        drv += L"bin\\dsp_mmc3_code.bin";
-		data += L"bin\\dsp_mmc3_data.bin";
+        drv += flatTrackData ? L"bin\\dsp_mmc3_flat_code.bin" : L"bin\\dsp_mmc3_code.bin";
+		data += flatTrackData ? L"bin\\dsp_mmc3_flat_data.bin" : L"bin\\dsp_mmc3_data.bin";
     }
 
 
@@ -604,9 +735,19 @@ void FileWriter::createNes()
         };
 
         std::vector<MusicBanks> musicbanks;
-        for (int i = 0; i < musicnum; i++)
+        if (flatTrackData)
         {
-            musicbanks.push_back(makeMusicBanks(i));
+            for (auto& bank : makeFlatTrackBanks(seqdata, musicnum))
+            {
+                musicbanks.push_back({ std::move(bank), {} });
+            }
+        }
+        else
+        {
+            for (int i = 0; i < musicnum; i++)
+            {
+                musicbanks.push_back(makeMusicBanks(i));
+            }
         }
 
         auto loadDpcmData = [&](int capacity)
@@ -1016,6 +1157,7 @@ void FileWriter::createNsf()
     const int fixeddrvsize = 0x2000;
     const int musicbanksize = 0x2000;
     const int dpcmbanksize = 0x4000;
+    const bool flatTrackData = canUseFlatTrackBanks(seqdata, musicnum);
 
     char c;
 
@@ -1026,32 +1168,32 @@ void FileWriter::createNsf()
 
     if (expdevice & Expdev::VRC6)
     {
-        drv += L"bin\\drv_vrc6.bin";
+        drv += flatTrackData ? L"bin\\drv_vrc6_flat.bin" : L"bin\\drv_vrc6.bin";
     }
     else if (expdevice & Expdev::VRC7)
     {
-        drv += L"bin\\drv_vrc7.bin";
+        drv += flatTrackData ? L"bin\\drv_vrc7_flat.bin" : L"bin\\drv_vrc7.bin";
     }
     else if (expdevice & Expdev::FDS)
     {
-        drv += L"bin\\drv_fds.bin";
+        drv += flatTrackData ? L"bin\\drv_fds_flat.bin" : L"bin\\drv_fds.bin";
     }
     else if (expdevice & Expdev::MMC5)
     {
-        drv += L"bin\\drv_mmc5.bin";
+        drv += flatTrackData ? L"bin\\drv_mmc5_flat.bin" : L"bin\\drv_mmc5.bin";
     }
     else if (expdevice & Expdev::N163)
     {
-        drv += L"bin\\drv_n163.bin";
+        drv += flatTrackData ? L"bin\\drv_n163_flat.bin" : L"bin\\drv_n163.bin";
     }
     else if (expdevice & Expdev::SS5B)
     {
-        drv += L"bin\\drv_ss5b.bin";
+        drv += flatTrackData ? L"bin\\drv_ss5b_flat.bin" : L"bin\\drv_ss5b.bin";
     }
     else
     {
         //2A03
-        drv += L"bin\\drv.bin";
+        drv += flatTrackData ? L"bin\\drv_flat.bin" : L"bin\\drv.bin";
     }
 
     auto drvsize = Utils::GetFileSize(drv);
@@ -1326,9 +1468,19 @@ void FileWriter::createNsf()
     };
 
     std::vector<MusicBanks> musicbanks;
-    for (int i = 0; i < musicnum; i++)
+    if (flatTrackData)
     {
-        musicbanks.push_back(makeMusicBanks(i));
+        for (auto& bank : makeFlatTrackBanks(seqdata, musicnum))
+        {
+            musicbanks.push_back({ std::move(bank), {} });
+        }
+    }
+    else
+    {
+        for (int i = 0; i < musicnum; i++)
+        {
+            musicbanks.push_back(makeMusicBanks(i));
+        }
     }
 
     int dpcmbank = nextAdditionalBank;

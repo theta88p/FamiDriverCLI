@@ -116,7 +116,7 @@ SeqAddr_L:		.res	1	;シーケンス情報のアドレスL
 SeqAddr_H:		.res	1	;シーケンス情報のアドレスH
 PrevDev:		.res	1	;前回の音源（レジスタ書き込み用）
 LastTrack:		.res	1	;使用する最大トラック数 - 1
-DrvBankedMode:	.res	1	;0:従来形式 1:NSFトラックバンク形式
+DrvBankedMode:	.res	1	;0:固定曲バンク/従来形式 1:NSFトラックバンク形式 2:DSPトラックバンク形式
 
 .ifdef SS5B
 SS5BTone:		.res	3
@@ -351,7 +351,9 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta SpdFreq_H
 		sta SpdCtr_L
 		sta SpdCtr_H
-		.if .defined(MMC3) .or .defined(VRC6) .or .defined(VRC7) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
+		.ifdef FLAT_TRACK_DATA
+		lda #0
+		.elseif .defined(MMC3) .or .defined(VRC6) .or .defined(VRC7) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
 		lda #2
 		.else
 		lda #0
@@ -425,6 +427,28 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta SeqAddr_L
 		stx Work + 1
 		stx SeqAddr_H
+		.if .defined(FLAT_TRACK_DATA) .and .defined(DSP_DRIVER)
+		lda #0
+		sta Work
+		sta SeqAddr_L
+		.if .defined(VRC6) .or .defined(VRC7)
+		lda #$80
+		.else
+		lda #$a0
+		.endif
+		sta Work + 1
+		sta SeqAddr_H
+		tya
+		.if .defined(VRC7)
+		clc
+		adc #2
+		.elseif .defined(MMC3) .or .defined(MMC5) .or .defined(SS5B) .or .defined(N163)
+		clc
+		adc #1
+		.endif
+		sta Work + 7
+		jsr select_dsp_bank
+		.else
 		lda DrvBankedMode
 		cmp #2
 		bne @address_ready
@@ -445,6 +469,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		adc #2
 		jsr select_dsp_bank
 	@address_ready:
+		.endif
 		tya
 		asl
 	load:
@@ -477,12 +502,17 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		lda (Work), y
 		adc SeqAddr_H
 		sta Ptr_H, x
+		.ifndef FLAT_TRACK_DATA
 		lda DrvBankedMode
 		beq @bank_done
 		iny
 		lda (Work), y
 		sta TrackBank, x
 	@bank_done:
+		.elseif .defined(N163) .and .defined(DSP_DRIVER)
+		lda Work + 7
+		sta TrackBank, x
+		.endif
 		jsr track_init	;トラック初期化
 		inx
 		iny
@@ -617,7 +647,9 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 ; ------------------------------------------------------------------------
 .proc track
 	start:
+		.ifndef FLAT_TRACK_DATA
 		jsr select_track_bank
+		.endif
 		lda Frags, x
 		and #FRAG_END
 		bne next		;終了フラグが立っていなければ処理へ
@@ -1877,7 +1909,9 @@ sw_sweep_delay_table:
 ; ------------------------------------------------------------------------
 .proc envelope
 	start:
+		.ifndef FLAT_TRACK_DATA
 		jsr select_track_bank
+		.endif
 		lda Device, x
 		cmp #$ff
 		beq next			;未使用トラックは処理しない
