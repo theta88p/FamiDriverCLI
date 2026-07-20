@@ -2,9 +2,12 @@
 .export		_main
 .export		_init
 .export		_play
+.export		frame_request
 
 .importzp	CpuCtrL
 .importzp	CpuCtrH
+.importzp	CpuFrameL
+.importzp	CpuFrameH
 .import		DrvFrags
 .import		drv_init
 .import		drv_sndreq
@@ -51,6 +54,13 @@ bgm_00:		.addr	BGM0
 		jsr drop_inc
 		jmp @count
 	@exec:
+		lda CpuCtrL
+		sta CpuFrameL
+		lda CpuCtrH
+		sta CpuFrameH
+		lda #0
+		sta CpuCtrL
+		sta CpuCtrH
 		jsr drv_main
 		jsr dsp_main
 		lda #0
@@ -70,12 +80,28 @@ bgm_00:		.addr	BGM0
 	jsr drv_init
 	lda #0
 	sta MainExecFrag
+	sta CpuCtrL
+	sta CpuCtrH
+	sta CpuFrameL
+	sta CpuFrameH
 	
 	pla
 	tay
 	lda	bgm_00
 	ldx	bgm_00 + 1
 	jsr	drv_sndreq
+	rts
+.endproc
+
+.proc frame_request
+	lda MainExecFrag		;前回の処理要求が残っていれば1フレーム処理落ち
+	beq :+
+	lda #0				;処理中に次のNMIが来たフレームは空き時間なし
+	sta CpuFrameL
+	sta CpuFrameH
+	jsr drop_inc
+:	lda #1
+	sta MainExecFrag
 	rts
 .endproc
 

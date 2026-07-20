@@ -18,6 +18,8 @@
 
 .exportzp	CpuCtrL
 .exportzp	CpuCtrH
+.exportzp	CpuFrameL
+.exportzp	CpuFrameH
 .export 	dsp_init
 .export 	dsp_main
 .export 	dsp_write
@@ -48,6 +50,8 @@ __ss:		.res	1
 __m:		.res	1
 __mm:		.res	1
 
+.zeropage
+
 POctHead:		.res	3
 POctave:		.res	3
 PNote:			.res	3
@@ -70,6 +74,8 @@ PAVolume:		.res	4
 DropCtr:		.res	1
 Drop1:			.res	1
 Drop2:			.res	1
+CpuFrameL:		.res	1
+CpuFrameH:		.res	1
 CpuL1:			.res	1
 CpuL2:			.res	1
 CpuH1:			.res	1
@@ -1007,60 +1013,56 @@ YPOS_CPU = $bf
 		lsr
 		lsr
 		lsr
-		clc
-		adc #$30
+		tax
+		lda HexDigits, x
 		sta Drop1
-		lda #%00001111
-		and DropCtr
-		clc
-		adc #$30
+		lda DropCtr
+		and #%00001111
+		tax
+		lda HexDigits, x
 		sta Drop2
 		;残りCPU時間
 		;上位バイト
-		lda CpuCtrH
+		lda CpuFrameH
 		lsr
 		lsr
 		lsr
 		lsr
-		clc
-		adc #$30
+		tax
+		lda HexDigits, x
 		sta CpuH2
 		lda #%00001111
-		and CpuCtrH
-		clc
-		adc #$30
+		and CpuFrameH
+		tax
+		lda HexDigits, x
 		sta CpuH1
 		;下位バイト
-		lda CpuCtrL
+		lda CpuFrameL
 		lsr
 		lsr
 		lsr
 		lsr
-		clc
-		adc #$30
+		tax
+		lda HexDigits, x
 		sta CpuL2
 		lda #%00001111
-		and CpuCtrL
-		clc
-		adc #$30
+		and CpuFrameL
+		tax
+		lda HexDigits, x
 		sta CpuL1
 		;下位バイトバー位置
-		lda CpuCtrH
+		lda CpuFrameH
 		sta CpuBar	;ここで保存しないとズレる
 		asl
 		asl
 		asl
 		sta DspWork
-		lda CpuCtrL
+		lda CpuFrameL
 		lsr
 		lsr
 		lsr
 		lsr
 		lsr
-		sta DspWork + 1
-		lda #8
-		sec
-		sbc DspWork + 1
 		clc
 		adc DspWork
 		clc
@@ -1068,12 +1070,6 @@ YPOS_CPU = $bf
 		sta CPUREM + 3
 		lda #YPOS_CPU
 		sta CPUREM + 0
-		;カウンタ初期化
-		lda #0
-		sta CpuCtrL
-		lda #0
-		sta CpuCtrH
-
 	end:
 		rts
 .endproc
@@ -1346,9 +1342,9 @@ vrc7_dsp_channel:
 		sta $2006
 		lda #$07
 		sta $2006
-		lda Drop2
-		sta $2007
 		lda Drop1
+		sta $2007
+		lda Drop2
 		sta $2007
 		;残りCPU時間
 		lda #$23
@@ -2151,18 +2147,32 @@ vrc7_dsp_channel:
 
 
 .proc drop_inc
-		;ドロップカウンタ10進計算
 		inc DropCtr
 		lda DropCtr
-		and #%00001111
-		cmp #$0a
-		bcc :+
+		lsr
+		lsr
+		lsr
+		lsr
+		tax
+		lda HexDigits, x
+		sta Drop1
 		lda DropCtr
-		and #%11110000
-		clc
-		adc #$10
-		sta DropCtr
-	:	rts
+		and #%00001111
+		tax
+		lda HexDigits, x
+		sta Drop2
+		lda #0
+		sta CpuFrameL
+		sta CpuFrameH
+		sta CpuBar
+		lda #$30
+		sta CpuL1
+		sta CpuL2
+		sta CpuH1
+		sta CpuH2
+		lda #88
+		sta CPUREM + 3
+		rts
 .endproc
 
 .proc pulse
@@ -2684,6 +2694,9 @@ vrc7_dsp_channel:
 
 
 ;ノートナンバーを位置に変換するテーブル
+HexDigits:
+	.byte	"0123456789", $3a, $3b, $3c, $3d, $3e, $3f
+
 posmap:
 	.byte	$00, $01, $03, $04, $06, $09, $0A, $0C, $0D, $0F, $10, $12
 
