@@ -381,6 +381,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta EnvFrags, x
 		sta Tone, x
 		sta Frags, x
+		txa
+		sec
+		sbc #MAX_TRACK
+		sta LoopDepth, x	;トラック番号-1階層分を保持し、加算だけでループ配列を引く
 .ifdef VRC7
 		lda Device, x
 		cmp #DEV_VRC7_CH1
@@ -777,8 +781,11 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		rts
 		
 	loop_start:			;ループ開始
-		inc LoopDepth, x
-		jsr loopoffset
+		lda LoopDepth, x
+		clc
+		adc #MAX_TRACK
+		sta LoopDepth, x
+		tay
 		sty Work + 2
 		ldy #1
 		lda (Work), y
@@ -793,7 +800,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		rts
 		
 	loop_end:			;ループ終了
-		jsr loopoffset
+		ldy LoopDepth, x
 		lda LoopN, y		;yだと直接decできない
 		sec
 		sbc #1
@@ -807,7 +814,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta Ptr_H, x
 		rts
 	@E2:
-		dec LoopDepth, x	;ループを抜けたら深度減算
+		lda LoopDepth, x
+		sec
+		sbc #MAX_TRACK
+		sta LoopDepth, x	;ループを抜けたら深度減算
 		lda #1
 		jsr addptr
 		rts
@@ -829,7 +839,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		rts
 		
 	loop_mid_end:			;ループ途中終了
-		jsr loopoffset
+		ldy LoopDepth, x
 		lda LoopN, y
 		cmp #2
 		bcs @E
@@ -839,7 +849,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta Ptr_L, x
 		lda LoopAddr_H, y
 		sta Ptr_H, x
-		dec LoopDepth, x	;ループを抜けたら深度減算
+		lda LoopDepth, x
+		sec
+		sbc #MAX_TRACK
+		sta LoopDepth, x	;ループを抜けたら深度減算
 		rts
 	@E:
 		lda #1
@@ -1396,8 +1409,11 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		iny
 		lda (Work), y
 		sta Work + 3
-		inc LoopDepth, x
-		jsr loopoffset
+		lda LoopDepth, x
+		clc
+		adc #MAX_TRACK
+		sta LoopDepth, x
+		tay
 		lda LoopN, y
 		clc
 		adc #1
@@ -3800,25 +3816,6 @@ sw_sweep_delay_table:
 		bcc @E
 		inc Ptr_H, x
 	@E:
-		rts
-.endproc
-
-
-;ループ値のあるアドレスのオフセットを計算してyにセット
-.proc loopoffset
-		lda LoopDepth, x
-		sec
-		sbc #1				;深度1がメモリ0の位置なので1引く
-		ldx ProcTr			;トラック0なら終了
-		beq @E
-	@L:
-		clc
-		adc #MAX_LOOP
-		dex
-		bne @L
-	@E:
-		ldx ProcTr
-		tay
 		rts
 .endproc
 
