@@ -32,14 +32,14 @@ This is a sound driver that can be played on a Famicom/NES or emulator. This typ
 * N163 waveforms are shared by all songs. Their total capacity is `256 - 16 * (the largest N163CH value in the file)` samples. Each waveform length must be a multiple of 4 within that capacity.
 * You can specify a note map with @M. This is for assigning commands to scales. Just write the note number to assign, the note number to convert, and the command, and the compiler will convert it.
 
-* You can define DPCM with @dpcm. Please write the number and file path. This method uses the @ command to specify a file and select the playback frequency based on the scale. If you find it difficult to use, please use @M to assign it to a note.
+* You can define DPCM with @dpcm. Write the number, initial DAC value, loop flag (0: off, 1: on), and file path. This method uses the @ command to specify a file and select the playback frequency based on the scale. If you find it difficult to use, please use @M to assign it to a note.
 * Even if you use key shift while using DPCM in note map,
 It will not play properly because only the pitch changes, but the tone does not.
 ```
 
     @DPCM {
-        0   kick.dmc
-        1   snare.dmc
+        0 0 0 "kick.dmc"
+        1 0 1 "snare.dmc"
     }
 
     @M0 {

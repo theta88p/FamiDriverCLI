@@ -757,65 +757,81 @@ void MMLReader::readDifinitions()
                             {
                                 int dpcminit = n;
                                 skipSpace();
-                                if (isNextChar('"'))
+                                if (getMultiDigit(n))
                                 {
-                                    std::wstring str;
-                                    while (ss.get(c))
+                                    int dpcmloop = n;
+                                    if (dpcmloop < 0 || dpcmloop > 1)
                                     {
-                                        if (c != '"')
+                                        std::cerr << "Line " << linenum << " : DPCM Loop Flag must be 0 or 1." << std::endl;
+                                        exit(1);
+                                    }
+                                    skipSpace();
+                                    if (isNextChar('"'))
+                                    {
+                                        std::wstring str;
+                                        while (ss.get(c))
                                         {
-                                            str += c;
+                                            if (c != '"')
+                                            {
+                                                str += c;
+                                            }
+                                            else
+                                            {
+                                                break;
+                                            }
+                                        }
+                                        if (!str.empty())
+                                        {
+                                            if (!Utils::GetFullPath(str))
+                                            {
+                                                std::cerr << "Line " << linenum << " : Failed to get DPCM path." << std::endl;
+                                                exit(1);
+                                            }
                                         }
                                         else
                                         {
-                                            break;
-                                        }
-                                    }
-                                    if (!str.empty())
-                                    {
-                                        if (!Utils::GetFullPath(str))
-                                        {
-                                            std::cerr << "Line " << linenum << " : Failed to get DPCM path." << std::endl;
+                                            std::cerr << "Line " << linenum << " : Missing DPCM path." << std::endl;
                                             exit(1);
+                                        }
+                                        DpcmInfo d;
+                                        d.path = str;
+                                        d.init = dpcminit;
+                                        d.loop = dpcmloop;
+                                        dpcmlist[dpcmnum] = d;
+                                        skipSpace();
+                                        skipComment();
+                                        skipSpace();
+                                        if (isNextChar('}'))
+                                        {
+                                            int offset = dpcmoffset;
+
+                                            for (auto& [num, dpcm] : dpcmlist)
+                                            {
+                                                int size = (int)Utils::GetFileSize(dpcm.path);
+                                                if (size > 0)
+                                                {
+                                                    dpcm.offset = offset;
+                                                    dpcm.size = size;
+                                                    offset += size;
+                                                }
+                                                else
+                                                {
+                                                    std::cerr << "Line " << linenum << " : Failed to get DPCM file size." << std::endl;
+                                                    exit(1);
+                                                }
+                                            }
+                                            break;
                                         }
                                     }
                                     else
                                     {
-                                        std::cerr << "Line " << linenum << " : Missing DPCM path." << std::endl;
+                                        std::cerr << "Line " << linenum << " : Missing \"." << std::endl;
                                         exit(1);
-                                    }
-                                    DpcmInfo d;
-                                    d.path = str;
-									d.init = dpcminit;
-                                    dpcmlist[dpcmnum] = d;
-                                    skipSpace();
-                                    skipComment();
-                                    skipSpace();
-                                    if (isNextChar('}'))
-                                    {
-                                        int offset = dpcmoffset;
-
-                                        for (auto& [num, dpcm] : dpcmlist)
-                                        {
-                                            int size = (int)Utils::GetFileSize(dpcm.path);
-                                            if (size > 0)
-                                            {
-                                                dpcm.offset = offset;
-                                                dpcm.size = size;
-                                                offset += size;
-                                            }
-                                            else
-                                            {
-                                                std::cerr << "Line " << linenum << " : Failed to get DPCM file size." << std::endl;
-                                                exit(1);
-                                            }
-                                        }
-                                        break;
                                     }
                                 }
                                 else
                                 {
-                                    std::cerr << "Line " << linenum << " : Missing \"." << std::endl;
+                                    std::cerr << "Line " << linenum << " : Missing DPCM Loop Flag." << std::endl;
                                     exit(1);
                                 }
                             }
@@ -2211,7 +2227,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             TONE,
             static_cast<unsigned char>(dpcm.offset / 0x40),
             static_cast<unsigned char>(dpcm.size / 0x10),
-            static_cast<unsigned char>(dpcm.init)
+            static_cast<unsigned char>(dpcm.init),
+            static_cast<unsigned char>(dpcm.loop << 6)
         };
         data.insert(data.begin(), defaults.begin(), defaults.end());
     };
@@ -2497,6 +2514,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                                 data.push_back(dpcmlist[args[0]].offset / 0x40);
                                 data.push_back(dpcmlist[args[0]].size / 0x10);
                                 data.push_back(dpcmlist[args[0]].init);
+                                data.push_back(dpcmlist[args[0]].loop << 6);
                                 dpcmToneSpecified = true;
                             }
                             else
@@ -2825,6 +2843,7 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         data.push_back(dpcmlist[n].offset / 0x40);
                         data.push_back(dpcmlist[n].size / 0x10);
                         data.push_back(dpcmlist[n].init);
+                        data.push_back(dpcmlist[n].loop << 6);
                         dpcmToneSpecified = true;
                     }
                     else

@@ -47,6 +47,7 @@ TrackBank:		.res	MAX_TRACK	;NSFバンク切り替え用のトラックバンク
 LenCtr:			.res	MAX_TRACK	;音長カウンタ
 GateCtr:		.res	MAX_TRACK	;ゲートカウンター
 NoteN:			.res	MAX_TRACK	;ノートナンバー
+DpcmLoop:		.res	MAX_TRACK	;DPCMループフラグ（$4010 bit 6）
 DefLen:			.res	MAX_TRACK	;デフォルト音長
 Gate:			.res	MAX_TRACK	;上位2bit:使用中のゲートコマンド 下位6bit:ゲートコマンドの値
 TrVolume:		.res	MAX_TRACK	;トラック音量
@@ -382,6 +383,7 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		sta VEnvPos, x
 		sta EnvFrags, x
 		sta Tone, x
+		sta DpcmLoop, x
 		sta Frags, x
 		txa
 		sec
@@ -1078,7 +1080,10 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		ldy #3
 		lda (Work), y
 		sta Volume, x
-		lda #4
+		ldy #4
+		lda (Work), y
+		sta DpcmLoop, x
+		lda #5
 		jsr addptr
 		rts
 		
@@ -3143,6 +3148,7 @@ sw_sweep_delay_table:
 		jmp @end
 	@play:
 		lda NoteN, x
+		ora DpcmLoop, x
 		sta $4010
 		lda Volume, x
 		bmi @N
