@@ -2541,6 +2541,8 @@ sw_sweep_delay_table:
 		sta Work
 		lda VEnvAddr_H, x
 		sta Work + 1
+		lda #0
+		sta Work + 9
 		lda Frags, x
 		and #FRAG_KEYOFF
 		bne keyoff
@@ -2549,8 +2551,11 @@ sw_sweep_delay_table:
 		bne keyon
 		lda DrvFrags
 		and #DRV_DOUBLE
-		bne get
+		bne double
 		jmp count
+	double:
+		inc Work + 9
+		jmp get
 	keyon:
 		lda #1
 		sta VEnvPos, x		;キーオン位置に移動
@@ -2592,6 +2597,8 @@ sw_sweep_delay_table:
 		tay
 		lda (Work), y		;アドレスにあるデータを取得（音量）
 		sta Volume, x
+		lda Work + 9
+		bne end
 		lda VEnvCtr, x
 		cmp #2
 		bcc :+
@@ -2654,6 +2661,8 @@ sw_sweep_delay_table:
 		sta Work
 		lda FEnvAddr_H, x
 		sta Work + 1
+		lda #0
+		sta Work + 9
 		lda Frags, x
 		and #FRAG_KEYOFF
 		bne keyoff
@@ -2662,8 +2671,11 @@ sw_sweep_delay_table:
 		bne keyon
 		lda DrvFrags
 		and #DRV_DOUBLE
-		bne get
+		bne double
 		jmp count
+	double:
+		inc Work + 9
+		jmp get
 	keyon:
 		lda #1
 		sta FEnvPos, x		;キーオン位置に移動
@@ -2826,6 +2838,8 @@ sw_sweep_delay_table:
 		sta Freq_X, x
 .endif
 	frame:
+		lda Work + 9
+		bne end
 		lda FEnvCtr, x
 		cmp #2
 		bcc :+
