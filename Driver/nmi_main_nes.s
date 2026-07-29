@@ -3,7 +3,6 @@
 
 .importzp	MainExecFrag
 .import		dsp_write
-.import		frame_request
 .import		__c
 .import		__cc
 .import		__s
@@ -30,7 +29,7 @@
 ; Call sound driver main routine
 ;---------------------------------------
 	
-	jsr frame_request
+	inc MainExecFrag
 	jsr dsp_write
 	;スクロール位置
 	lda	#0

@@ -2,7 +2,6 @@
 .export		_main
 .export		_init
 .export		_play
-.export		frame_request
 
 .importzp	CpuCtrL
 .importzp	CpuCtrH
@@ -23,6 +22,7 @@
 .zeropage
 
 MainExecFrag:	.res	1
+MainExecFrame:	.res	1
 
 ; ------------------------------------------------------------------------
 ; play
@@ -48,25 +48,51 @@ bgm_00:		.addr	BGM0
 
 		jmp @count
 	@loop:
+		tax
+		sec
+		sbc MainExecFrame
+		stx MainExecFrame
+		cmp #1
+		beq @driver
+		jsr drop_inc
+		lda #0
+		sta CpuCtrL
+		sta CpuCtrH
+		lda DrvFrags
+		and #DRV_IS_FREE
+		bne @run
+		jmp @count
+	@driver:
 		lda DrvFrags
 		and #DRV_IS_FREE
 		bne @exec
 		jsr drop_inc
+		lda #0
+		sta CpuCtrL
+		sta CpuCtrH
 		jmp @count
 	@exec:
 		lda CpuCtrL
 		sta CpuFrameL
 		lda CpuCtrH
 		sta CpuFrameH
+	@run:
 		lda #0
 		sta CpuCtrL
 		sta CpuCtrH
 		jsr drv_main
 		jsr dsp_main
+		lda MainExecFrag
+		cmp MainExecFrame
+		beq @count
+		sta MainExecFrame
+		jsr drop_inc
 		lda #0
-		sta MainExecFrag
+		sta CpuCtrL
+		sta CpuCtrH
 	@count:
 		lda MainExecFrag
+		cmp MainExecFrame
 		bne @loop
 		inc CpuCtrL
 		bne @count
@@ -80,6 +106,7 @@ bgm_00:		.addr	BGM0
 	jsr drv_init
 	lda #0
 	sta MainExecFrag
+	sta MainExecFrame
 	sta CpuCtrL
 	sta CpuCtrH
 	sta CpuFrameL
@@ -90,18 +117,6 @@ bgm_00:		.addr	BGM0
 	lda	bgm_00
 	ldx	bgm_00 + 1
 	jsr	drv_sndreq
-	rts
-.endproc
-
-.proc frame_request
-	lda MainExecFrag		;前回の処理要求が残っていれば1フレーム処理落ち
-	beq :+
-	lda #0				;処理中に次のNMIが来たフレームは空き時間なし
-	sta CpuFrameL
-	sta CpuFrameH
-	jsr drop_inc
-:	lda #1
-	sta MainExecFrag
 	rts
 .endproc
 

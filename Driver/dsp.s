@@ -1067,6 +1067,13 @@ YPOS_CPU = $bf
 		sta CpuL1
 		;下位バイトバー位置
 		lda CpuFrameH
+		cmp #$10
+		bcc @cpu_bar_position
+		lda #$10
+		sta CpuBar
+		lda #88 + 16 * 8
+		jmp @cpu_marker_position
+	@cpu_bar_position:
 		sta CpuBar	;ここで保存しないとズレる
 		asl
 		asl
@@ -1082,6 +1089,7 @@ YPOS_CPU = $bf
 		adc DspWork
 		clc
 		adc #88
+	@cpu_marker_position:
 		sta CPUREM + 3
 		lda #YPOS_CPU
 		sta CPUREM + 0
@@ -1213,6 +1221,10 @@ vrc7_dsp_channel:
 
 
 .proc dsp_write
+.ifdef FDS
+		; Reset the PPU address latch before writing through $2006/$2007.
+		bit $2002
+.endif
 		;時間表示
 		lda #$20
 		sta $2006
@@ -1379,22 +1391,20 @@ vrc7_dsp_channel:
 		sta $2006
 		lda #$2b
 		sta $2006
-		lda #$10
-		sec
-		sbc CpuBar
-		sta DspWork
-		ldx CpuBar
+		ldx #0
+	@cpu_bar:
+		cpx CpuBar
+		bcc @cpu_bar_fill
+		beq @cpu_bar_fill
+		lda #$02
+		bne @cpu_bar_write
+	@cpu_bar_fill:
+		lda #$29
+	@cpu_bar_write:
+		sta $2007
 		inx
-	:	lda #$29
-		sta $2007
-		dex
-		bne :-
-		ldx DspWork
-		beq end
-	:	lda #$02
-		sta $2007
-		dex
-		bne :-
+		cpx #$11
+		bcc @cpu_bar
 	end:
 		rts
 .endproc
