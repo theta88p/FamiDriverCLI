@@ -2301,7 +2301,7 @@ vrc7_dsp_channel:
 		lda DspWork + 1
 		bne @E
 		lda DspWork
-		cmp #$37				;レジスタ値が$35(53)+2より小さくなるまでオクターブを上げる
+		cmp #$36				;レジスタ値が$35(53)+1より小さくなるまでオクターブを上げる
 		bcc next
 	@E:
 		lsr DspWork + 1
