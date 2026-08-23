@@ -1044,16 +1044,18 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		ldy #1
 		lda (Work), y
 		sta $e000
-		ldy #2
-		lda (Work), y
+		and #$08
+		eor #$08
 		sta SS5BTone + 0
-		ldy #3
 		lda (Work), y
+		and #$10
+		eor #$10
 		sta SS5BTone + 1
-		ldy #4
 		lda (Work), y
+		and #$20
+		eor #$20
 		sta SS5BTone + 2
-		lda #5
+		lda #2
 		jsr addptr
 		rts
 	@N:

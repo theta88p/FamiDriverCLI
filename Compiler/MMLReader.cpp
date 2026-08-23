@@ -2548,10 +2548,6 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
 
                             data.push_back(TONE);
                             data.push_back(mixer);
-                            for (int value : args)
-                            {
-                                data.push_back(static_cast<unsigned char>(value));
-                            }
                         }
                         else
                         {
@@ -2946,10 +2942,6 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     {
                         data.push_back(TONE);
                         data.push_back(mixer);
-                        for (int value : t)
-                        {
-                            data.push_back(static_cast<unsigned char>(value));
-                        }
                     }
                     else
                     {
