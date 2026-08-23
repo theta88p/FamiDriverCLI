@@ -3602,6 +3602,9 @@ sw_sweep_delay_table:
 		sty $c000
 		lda Freq_H, x
 		sta $e000
+		tya
+		lsr a
+		tay
 		lda SS5BTone, y
 		beq end
 		lda #$06

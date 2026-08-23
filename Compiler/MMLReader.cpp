@@ -50,6 +50,34 @@ static bool packSoftwareSweep(int start, int end, int delay, int speed, unsigned
     return true;
 }
 
+static bool packSs5bTone(const std::vector<int>& tones, unsigned char& mixer)
+{
+    if (tones.size() != 3)
+    {
+        return false;
+    }
+
+    mixer = 0;
+    for (int i = 0; i < 3; i++)
+    {
+        switch (tones[i])
+        {
+        case 0: // Tone only
+            mixer |= 0x08 << i;
+            break;
+        case 1: // Noise only
+            mixer |= 0x01 << i;
+            break;
+        case 2: // Tone and noise
+            break;
+        default:
+            return false;
+        }
+    }
+
+    return true;
+}
+
 MMLReader::MMLReader()
 {
     totalpos = 0;
@@ -975,7 +1003,19 @@ void MMLReader::readDifinitions()
                                                 cmd = TONE;
                                                 ss.seekg((int)ss.tellg() - 1);
                                                 getMultiDigit(n);
-												args.push_back(n);
+                                                args.push_back(n);
+                                                skipSpaceUntilNextLine();
+                                                while (isNextChar(','))
+                                                {
+                                                    skipSpaceUntilNextLine();
+                                                    if (!getMultiDigit(n))
+                                                    {
+                                                        std::cerr << "Line " << linenum << " : [Map difinition] Missing tone argument." << std::endl;
+                                                        exit(1);
+                                                    }
+                                                    args.push_back(n);
+                                                    skipSpaceUntilNextLine();
+                                                }
                                                 break;
                                             default:
                                                 std::cerr << "Line " << linenum << " : [Map difinition] Invalid command." << std::endl;
@@ -2497,39 +2537,64 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                     else if (cmd == TONE)
                     {
-                        if (args[0] == 0)
+                        if (tr.device >= DEV_SS5B_SQR1 && tr.device <= DEV_SS5B_SQR3)
                         {
-                            pushVrc7Patch(0);
-                        }
-                        if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
-                        {
-                            pushN163WaveSetup(args[0]);
-                        }
-                        data.push_back(TONE);
-
-                        if (tr.device == DEV_2A03_DPCM)     //DPCMトラックなら
-                        {
-                            if (dpcmlist.count(args[0]))
+                            unsigned char mixer;
+                            if (!packSs5bTone(args, mixer))
                             {
-                                data.push_back(dpcmlist[args[0]].offset / 0x40);
-                                data.push_back(dpcmlist[args[0]].size / 0x10);
-                                data.push_back(dpcmlist[args[0]].init);
-                                data.push_back(dpcmlist[args[0]].loop << 6);
-                                dpcmToneSpecified = true;
-                            }
-                            else
-                            {
-                                std::cerr << "Line " << linenum << " : [Map] DPCM #" << args[0] << " is not registered." << std::endl;
+                                std::cerr << "Line " << linenum << " : [Map] SS5B tone requires exactly three values from 0 to 2." << std::endl;
                                 exit(1);
+                            }
+
+                            data.push_back(TONE);
+                            data.push_back(mixer);
+                            for (int value : args)
+                            {
+                                data.push_back(static_cast<unsigned char>(value));
                             }
                         }
                         else
                         {
-                            data.push_back(args[0]);
-                            tone = args[0];
-                            if (tr.device == DEV_FDS)
+                            if (args.size() != 1)
                             {
-                                fdsToneSpecified = true;
+                                std::cerr << "Line " << linenum << " : [Map] Tone requires one argument for this device." << std::endl;
+                                exit(1);
+                            }
+
+                            if (args[0] == 0)
+                            {
+                                pushVrc7Patch(0);
+                            }
+                            if (tr.device >= DEV_N163_CH1 && tr.device <= DEV_N163_CH8)
+                            {
+                                pushN163WaveSetup(args[0]);
+                            }
+                            data.push_back(TONE);
+
+                            if (tr.device == DEV_2A03_DPCM)     //DPCMトラックなら
+                            {
+                                if (dpcmlist.count(args[0]))
+                                {
+                                    data.push_back(dpcmlist[args[0]].offset / 0x40);
+                                    data.push_back(dpcmlist[args[0]].size / 0x10);
+                                    data.push_back(dpcmlist[args[0]].init);
+                                    data.push_back(dpcmlist[args[0]].loop << 6);
+                                    dpcmToneSpecified = true;
+                                }
+                                else
+                                {
+                                    std::cerr << "Line " << linenum << " : [Map] DPCM #" << args[0] << " is not registered." << std::endl;
+                                    exit(1);
+                                }
+                            }
+                            else
+                            {
+                                data.push_back(args[0]);
+                                tone = args[0];
+                                if (tr.device == DEV_FDS)
+                                {
+                                    fdsToneSpecified = true;
+                                }
                             }
                         }
                         usingCmds[cmd] = args;
@@ -2856,7 +2921,6 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                 {
                     std::vector<int> t;
                     t.push_back(n);
-                    int r = 0;
 
                     skipSpace();
                     while (getc(c))
@@ -2877,29 +2941,19 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                         skipSpace();
                     }
 
-                    if (t.size() >= 3)
+                    unsigned char mixer;
+                    if (packSs5bTone(t, mixer))
                     {
-                        for (int i = 0; i < 3; i++)
-                        {
-                            switch (t[i])
-                            {
-                            case 0:
-                                r |= 0x08 << i; break;
-                            case 1:
-                                r |= 0x01 << i; break;
-                            case 2:
-                                break;
-                            }
-                        }
                         data.push_back(TONE);
-                        data.push_back(r);
-                        data.push_back(t[0]);
-                        data.push_back(t[1]);
-                        data.push_back(t[2]);
+                        data.push_back(mixer);
+                        for (int value : t)
+                        {
+                            data.push_back(static_cast<unsigned char>(value));
+                        }
                     }
                     else
                     {
-                        std::cerr << "Line " << linenum << " : Missing tone arguments." << std::endl;
+                        std::cerr << "Line " << linenum << " : SS5B tone requires exactly three values from 0 to 2." << std::endl;
                         exit(1);
                     }
                 }
