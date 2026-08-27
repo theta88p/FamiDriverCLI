@@ -524,9 +524,15 @@ FdsModEnv:		.res	1	;モジュレータエンベロープの値
 		stx LastTrack
 		jmp def
 	nouse:
+		cpx #0
+		bne @has_tracks
+		stx LastTrack
+		jmp @mark_unused
+	@has_tracks:
 		dex
 		stx LastTrack
 		inx
+	@mark_unused:
 	@L:
 		lda #FRAG_END
 		sta Frags, x
