@@ -1,4 +1,5 @@
 #include <iostream>
+#include <filesystem>
 #include "MMLReader.h"
 #include "FileWriter.h"
 
@@ -132,18 +133,9 @@ int wmain(int argc, wchar_t* argv[])
 
     if (output.empty())
     {
-        output = input;
-
-        while (true)
-        {
-            if (output[output.size() - 1] == '.')
-            {
-                break;
-            }
-            output.pop_back();
-        }
-
-        output += ext;
+        std::filesystem::path outputPath(input);
+        outputPath.replace_extension(ext);
+        output = outputPath.wstring();
     }
 
     std::wcout << "Output: " << output << std::endl << std::endl;
