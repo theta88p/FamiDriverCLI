@@ -1865,6 +1865,8 @@ sw_sweep_delay_table:
 	load:
 		sty Work + 8	;周波数テーブルから周波数を取得
 		sta Work + 9
+		lda #0
+		sta Work + 4	;16bit音源の周波数上位バイトをクリア
 		lda Device, x
 .ifdef VRC6
 		cmp #DEV_VRC6_SAW
