@@ -78,7 +78,7 @@ int wmain(int argc, wchar_t* argv[])
         }
     }
 
-    for (int i = 0; i < argc; i++)
+    for (int i = 2; i < argc; i++)
     {
         if (argv[i][0] == '-')
         {
@@ -86,18 +86,12 @@ int wmain(int argc, wchar_t* argv[])
             {
             case 'o':
             case 'O'://Output
-                if (i + 1 < argc)
+                if (i + 1 >= argc || argv[i + 1][0] == L'\0' || argv[i + 1][0] == L'-')
                 {
-                    if (argv[i + 1] != L"")
-                    {
-                        output = argv[i + 1];
-                    }
-                    else
-                    {
-                        std::wcerr << "Missing output filename." << std::endl;
-                        exit(1);
-                    }
+                    std::wcerr << "Missing output filename." << std::endl;
+                    exit(1);
                 }
+                output = argv[++i];
                 break;
             case 'r':
             case 'R'://Raw
