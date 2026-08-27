@@ -2107,6 +2107,8 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
     int loopmid_volume = 15;
 	int loopmid_octave = 4;
     int loopmid_tone = 0;
+    constexpr int maxLoopDepth = 3;
+    int loopDepth = 0;
     bool isTrack = false;
     bool isMusic = false;
     bool usePDelay = false;
@@ -2787,13 +2789,25 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             skipSpace();
             if (getMultiDigit(n))
             {
+                if (loopDepth >= maxLoopDepth)
+                {
+                    std::cerr << "Line " << linenum << " : Loop nesting must be 3 levels or less." << std::endl;
+                    exit(1);
+                }
                 data.push_back(LOOP_START);
                 data.push_back(n);
+                loopDepth++;
                 isLooped = true;
             }
             break;
         case ']':   //ループ終了
+            if (loopDepth == 0)
+            {
+                std::cerr << "Line " << linenum << " : Unexpected ]." << std::endl;
+                exit(1);
+            }
             data.push_back(LOOP_END);
+            loopDepth--;
             isLooped = false;
             if (isLoopedMid)
             {
@@ -2805,6 +2819,11 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             }
             break;
         case ':':   //ループ途中終了
+            if (loopDepth == 0)
+            {
+                std::cerr << "Line " << linenum << " : Unexpected : outside loop." << std::endl;
+                exit(1);
+            }
             data.push_back(LOOP_MID_END);
 			isLoopedMid = true;
             //ループ途中終了時のパラメータを保存
@@ -3396,6 +3415,11 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
                     }
                     else
                     {
+                        if (loopDepth != 0)
+                        {
+                            std::cerr << "Line " << linenum << " : Missing ]." << std::endl;
+                            exit(1);
+                        }
                         usingCmds.clear();  //マップ関係の変数をここでリセットする
                         usingNoteMap = -1;
 
@@ -3805,6 +3829,11 @@ void MMLReader::readBrackets(int startpos, int trheadsize, std::vector<unsigned 
             }
             break;
         case '}':   //終了
+            if (loopDepth != 0)
+            {
+                std::cerr << "Line " << linenum << " : Missing ]." << std::endl;
+                exit(1);
+            }
             if (trheadsize > 0)
             {
                 if (isTrack)
