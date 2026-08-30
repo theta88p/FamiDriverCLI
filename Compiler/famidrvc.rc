@@ -52,8 +52,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,1,0
- PRODUCTVERSION 1,0,1,0
+ FILEVERSION 1,0,2,0
+ PRODUCTVERSION 1,0,2,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -70,12 +70,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "theta"
             VALUE "FileDescription", "FamiDriverCLI MML Compiler"
-            VALUE "FileVersion", "1.0.1.0"
+            VALUE "FileVersion", "1.0.2.0"
             VALUE "InternalName", "famidrvc.exe"
             VALUE "LegalCopyright", "Copyright (C) 2026 theta"
             VALUE "OriginalFilename", "famidrvc.exe"
             VALUE "ProductName", "FamiDriverCLI"
-            VALUE "ProductVersion", "1.0.1.0"
+            VALUE "ProductVersion", "1.0.2.0"
         END
     END
     BLOCK "VarFileInfo"
